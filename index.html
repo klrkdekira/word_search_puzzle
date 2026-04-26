@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Food Microbiology Word Search</title>
+  <style>
+    :root {
+      color-scheme: light;
+    }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f5f5f5;
+      color: #111;
+      display: flex;
+      min-height: 100vh;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .app {
+      width: min(100%, 980px);
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+    }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    button {
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      color: #fff;
+      background: #1f6feb;
+    }
+    button:hover {
+      background: #185abc;
+    }
+    .canvas-wrap {
+      overflow: auto;
+      border: 1px solid #e5e5e5;
+      border-radius: 10px;
+    }
+    canvas {
+      width: 100%;
+      height: auto;
+      display: block;
+      background: #fff;
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="controls">
+      <button id="generateBtn" type="button">Generate New Puzzle</button>
+      <button id="toggleBtn" type="button">Show Answers</button>
+      <button id="downloadBtn" type="button">Download Image</button>
+    </div>
+    <div class="canvas-wrap">
+      <canvas id="puzzleCanvas" width="1200" height="1600"></canvas>
+    </div>
+  </main>
+
+  <script>
+    const TERMS = [
+      "CROSSCONTAMINATION",
+      "THERMALDESTRUCTION",
+      "HURDLETECHNOLOGY",
+      "BACILLUSCEREUS",
+      "BACTERIOCIN",
+      "ATPTESTING",
+      "SANITATION",
+      "SWABBING",
+      "SPORES",
+      "DVALUE",
+      "ZVALUE",
+      "LISTERIA",
+      "BIOFILM",
+      "AMR",
+      "VBNC",
+    ];
+
+    const GRID_SIZE = 25;
+    const MAX_ATTEMPTS_PER_WORD = 200;
+    const ORIENTATIONS = [
+      { dx: 1, dy: 0 },
+      { dx: -1, dy: 0 },
+      { dx: 0, dy: 1 },
+      { dx: 0, dy: -1 },
+    ];
+    const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+    const canvas = document.getElementById("puzzleCanvas");
+    const ctx = canvas.getContext("2d");
+    const generateBtn = document.getElementById("generateBtn");
+    const toggleBtn = document.getElementById("toggleBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
+
+    let grid = [];
+    let solutionMap = [];
+    let showAnswers = false;
+
+    function makeEmptyGrid() {
+      return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(""));
+    }
+
+    function randomInt(max) {
+      return Math.floor(Math.random() * max);
+    }
+
+    function randomLetter() {
+      return ALPHABET[randomInt(ALPHABET.length)];
+    }
+
+    function canPlaceWord(word, x, y, dx, dy, board) {
+      for (let i = 0; i < word.length; i++) {
+        const nx = x + i * dx;
+        const ny = y + i * dy;
+        if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) return false;
+        const cell = board[ny][nx];
+        if (cell && cell !== word[i]) return false;
+      }
+      return true;
+    }
+
+    function placeWord(word, board) {
+      for (let attempt = 0; attempt < MAX_ATTEMPTS_PER_WORD; attempt++) {
+        const { dx, dy } = ORIENTATIONS[randomInt(ORIENTATIONS.length)];
+        const x = randomInt(GRID_SIZE);
+        const y = randomInt(GRID_SIZE);
+        if (!canPlaceWord(word, x, y, dx, dy, board)) continue;
+
+        const cells = [];
+        for (let i = 0; i < word.length; i++) {
+          const nx = x + i * dx;
+          const ny = y + i * dy;
+          board[ny][nx] = word[i];
+          cells.push({ x: nx, y: ny });
+        }
+
+        return { word, cells };
+      }
+
+      return null;
+    }
+
+    function fillEmptyCells(board) {
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          if (!board[y][x]) {
+            board[y][x] = randomLetter();
+          }
+        }
+      }
+    }
+
+    function generatePuzzle() {
+      const sortedWords = [...TERMS].sort((a, b) => b.length - a.length);
+
+      for (let restart = 0; restart < 1000; restart++) {
+        const board = makeEmptyGrid();
+        const placed = [];
+        let allPlaced = true;
+
+        for (const word of sortedWords) {
+          const result = placeWord(word, board);
+          if (!result) {
+            allPlaced = false;
+            break;
+          }
+          placed.push(result);
+        }
+
+        if (!allPlaced) continue;
+        fillEmptyCells(board);
+        grid = board;
+        solutionMap = placed;
+        return;
+      }
+
+      throw new Error("Unable to generate a valid puzzle after multiple attempts.");
+    }
+
+    function renderPuzzle() {
+      const width = canvas.width;
+      const height = canvas.height;
+      const titleY = 70;
+      const subtitleY = 120;
+
+      ctx.fillStyle = "#FFFFFF";
+      ctx.fillRect(0, 0, width, height);
+
+      ctx.fillStyle = "#000000";
+      ctx.textAlign = "center";
+      ctx.font = "bold 48px Arial, sans-serif";
+      ctx.fillText("FOOD MICROBIOLOGY WORD SEARCH", width / 2, titleY);
+
+      ctx.font = "bold 28px Arial, sans-serif";
+      ctx.fillText(showAnswers ? "ANSWER KEY" : "UNSOLVED PUZZLE", width / 2, subtitleY);
+
+      const cellSize = 38;
+      const gridPixelSize = GRID_SIZE * cellSize;
+      const gridStartX = Math.floor((width - gridPixelSize) / 2);
+      const gridStartY = 170;
+
+      if (showAnswers) {
+        for (const placement of solutionMap) {
+          ctx.fillStyle = "#FF000055";
+          for (const cell of placement.cells) {
+            ctx.fillRect(
+              gridStartX + cell.x * cellSize + 1,
+              gridStartY + cell.y * cellSize + 1,
+              cellSize - 2,
+              cellSize - 2
+            );
+          }
+        }
+      }
+
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#000000";
+      ctx.font = 'bold 30px "Courier New", monospace';
+
+      for (let y = 0; y < GRID_SIZE; y++) {
+        for (let x = 0; x < GRID_SIZE; x++) {
+          const px = gridStartX + x * cellSize + 7;
+          const py = gridStartY + y * cellSize + cellSize / 2;
+          ctx.fillText(grid[y][x], px, py);
+        }
+      }
+
+      const wordsTop = gridStartY + gridPixelSize + 60;
+      const columns = 3;
+      const rowsPerColumn = Math.ceil(TERMS.length / columns);
+      const colWidth = width / columns;
+
+      ctx.font = "24px Arial, sans-serif";
+      ctx.textBaseline = "alphabetic";
+
+      for (let i = 0; i < TERMS.length; i++) {
+        const col = Math.floor(i / rowsPerColumn);
+        const row = i % rowsPerColumn;
+        const x = col * colWidth + 30;
+        const y = wordsTop + row * 34;
+        ctx.fillText(TERMS[i], x, y);
+      }
+    }
+
+    function updateToggleLabel() {
+      toggleBtn.textContent = showAnswers ? "Hide Answers" : "Show Answers";
+    }
+
+    function downloadImage() {
+      const url = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = showAnswers ? "food-microbiology-answer-key.png" : "food-microbiology-word-search.png";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    generateBtn.addEventListener("click", () => {
+      generatePuzzle();
+      renderPuzzle();
+    });
+
+    toggleBtn.addEventListener("click", () => {
+      showAnswers = !showAnswers;
+      updateToggleLabel();
+      renderPuzzle();
+    });
+
+    downloadBtn.addEventListener("click", downloadImage);
+
+    generatePuzzle();
+    updateToggleLabel();
+    renderPuzzle();
+  </script>
+</body>
+</html>
