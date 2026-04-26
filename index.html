@@ -149,6 +149,18 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
             Allow reversed words
           </label>
         </div>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" id="allowDiagonalCheck" checked />
+            Allow diagonal words
+          </label>
+        </div>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" id="shuffleHintsCheck" />
+            Shuffle hints order
+          </label>
+        </div>
         <div class="controls">
           <button id="generateBtn" type="button">Generate New Puzzle</button>
           <button id="toggleBtn" type="button">Show Answers</button>
@@ -183,6 +195,12 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
         { dx: 0, dy: 1 },
         { dx: 0, dy: -1 },
       ];
+      const ORIENTATIONS_DIAG = [
+        { dx: 1, dy: 1 },
+        { dx: -1, dy: 1 },
+        { dx: 1, dy: -1 },
+        { dx: -1, dy: -1 },
+      ];
       const ANSWER_PALETTE = [
         { fill: "rgba(220,50,50,0.2)", stroke: "rgba(200,30,30,0.9)" },
         { fill: "rgba(30,140,200,0.2)", stroke: "rgba(20,110,180,0.9)" },
@@ -206,6 +224,8 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
       const termsTextarea = document.getElementById("termsTextarea");
       const paddingInput = document.getElementById("paddingInput");
       const allowReverseCheck = document.getElementById("allowReverseCheck");
+      const allowDiagonalCheck = document.getElementById("allowDiagonalCheck");
+      const shuffleHintsCheck = document.getElementById("shuffleHintsCheck");
       const statusMsg = document.getElementById("statusMsg");
 
       let grid = [];
@@ -267,15 +287,51 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
         return intersections;
       }
 
-      function placeWord(word, board, gridSize, orientations) {
-        let bestScore = -1;
+      function placeWord(word, board, gridSize, orientations, placedCells) {
+        let bestScore = -Infinity;
         let bestPlacement = null;
+
+        // Compute centroid of already-placed cells for spread bonus
+        let centroidX = 0,
+          centroidY = 0;
+        if (placedCells.length > 0) {
+          for (const c of placedCells) {
+            centroidX += c.x;
+            centroidY += c.y;
+          }
+          centroidX /= placedCells.length;
+          centroidY /= placedCells.length;
+        }
+
         for (let attempt = 0; attempt < MAX_ATTEMPTS_PER_WORD; attempt++) {
           const { dx, dy } = orientations[randomInt(orientations.length)];
           const x = randomInt(gridSize);
           const y = randomInt(gridSize);
-          const score = scorePlacement(word, x, y, dx, dy, board, gridSize);
-          if (score === null) continue;
+          const intersections = scorePlacement(
+            word,
+            x,
+            y,
+            dx,
+            dy,
+            board,
+            gridSize,
+          );
+          if (intersections === null) continue;
+
+          let spreadBonus = 0;
+          if (placedCells.length > 0) {
+            let totalDist = 0;
+            for (let i = 0; i < word.length; i++) {
+              const nx = x + i * dx;
+              const ny = y + i * dy;
+              totalDist += Math.sqrt(
+                (nx - centroidX) ** 2 + (ny - centroidY) ** 2,
+              );
+            }
+            spreadBonus = totalDist / word.length;
+          }
+
+          const score = intersections * 1000 + spreadBonus;
           if (score > bestScore) {
             bestScore = score;
             bestPlacement = { x, y, dx, dy };
@@ -310,14 +366,22 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
         for (let attempt = 0; attempt < MAX_FULL_PUZZLE_ATTEMPTS; attempt++) {
           const board = makeEmptyGrid(gridSize);
           const placed = [];
+          const placedCells = [];
           let allPlaced = true;
           for (const word of words) {
-            const result = placeWord(word, board, gridSize, orientations);
+            const result = placeWord(
+              word,
+              board,
+              gridSize,
+              orientations,
+              placedCells,
+            );
             if (!result) {
               allPlaced = false;
               break;
             }
             placed.push(result);
+            for (const c of result.cells) placedCells.push(c);
           }
           if (!allPlaced) continue;
           fillEmptyCells(board, gridSize);
@@ -492,17 +556,46 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
             const minY = Math.min(...ys);
             const maxX = Math.max(...xs);
             const maxY = Math.max(...ys);
-            const rx = gridStartX + minX * cellSize + 2;
-            const ry = gridStartY + minY * cellSize + 2;
-            const rw = (maxX - minX + 1) * cellSize - 4;
-            const rh = (maxY - minY + 1) * cellSize - 4;
-            ctx.beginPath();
-            ctx.roundRect(rx, ry, rw, rh, 6);
-            ctx.fillStyle = color.fill;
-            ctx.fill();
-            ctx.strokeStyle = color.stroke;
-            ctx.lineWidth = 2.5;
-            ctx.stroke();
+            const isDiagonal = maxX - minX > 0 && maxY - minY > 0;
+            if (isDiagonal) {
+              // Draw a single rotated pill along the word's diagonal angle
+              const first = cells[0];
+              const last = cells[cells.length - 1];
+              const cx1 = gridStartX + first.x * cellSize + cellSize / 2;
+              const cy1 = gridStartY + first.y * cellSize + cellSize / 2;
+              const cx2 = gridStartX + last.x * cellSize + cellSize / 2;
+              const cy2 = gridStartY + last.y * cellSize + cellSize / 2;
+              const midX = (cx1 + cx2) / 2;
+              const midY = (cy1 + cy2) / 2;
+              const angle = Math.atan2(cy2 - cy1, cx2 - cx1);
+              const pillW =
+                Math.sqrt((cx2 - cx1) ** 2 + (cy2 - cy1) ** 2) + cellSize - 4;
+              const pillH = cellSize - 4;
+              const radius = pillH / 2;
+              ctx.save();
+              ctx.translate(midX, midY);
+              ctx.rotate(angle);
+              ctx.beginPath();
+              ctx.roundRect(-pillW / 2, -pillH / 2, pillW, pillH, radius);
+              ctx.fillStyle = color.fill;
+              ctx.fill();
+              ctx.strokeStyle = color.stroke;
+              ctx.lineWidth = 2.5;
+              ctx.stroke();
+              ctx.restore();
+            } else {
+              const rx = gridStartX + minX * cellSize + 2;
+              const ry = gridStartY + minY * cellSize + 2;
+              const rw = (maxX - minX + 1) * cellSize - 4;
+              const rh = (maxY - minY + 1) * cellSize - 4;
+              ctx.beginPath();
+              ctx.roundRect(rx, ry, rw, rh, 6);
+              ctx.fillStyle = color.fill;
+              ctx.fill();
+              ctx.strokeStyle = color.stroke;
+              ctx.lineWidth = 2.5;
+              ctx.stroke();
+            }
           });
         }
 
@@ -598,14 +691,25 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
           return;
         }
         const padding = Math.max(1, parseInt(paddingInput.value, 10) || 2);
-        const orientations = allowReverseCheck.checked
-          ? ORIENTATIONS_ALL
-          : ORIENTATIONS_FORWARD;
+        const orientations = [
+          { dx: 1, dy: 0 },
+          { dx: 0, dy: 1 },
+          ...(allowReverseCheck.checked
+            ? [
+                { dx: -1, dy: 0 },
+                { dx: 0, dy: -1 },
+              ]
+            : []),
+          ...(allowDiagonalCheck.checked ? ORIENTATIONS_DIAG : []),
+        ];
+        const displayTerms = shuffleHintsCheck.checked
+          ? [...terms].sort(() => Math.random() - 0.5)
+          : terms;
         try {
           const result = generatePuzzle(terms, padding, orientations);
           grid = result.grid;
           solutionMap = result.solutionMap;
-          currentTerms = terms;
+          currentTerms = displayTerms;
           currentGridSize = result.gridSize;
           setStatus("");
           renderPuzzle();
@@ -619,6 +723,8 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
 
       generateBtn.addEventListener("click", safeGenerateAndRender);
       allowReverseCheck.addEventListener("change", safeGenerateAndRender);
+      allowDiagonalCheck.addEventListener("change", safeGenerateAndRender);
+      shuffleHintsCheck.addEventListener("change", safeGenerateAndRender);
 
       toggleBtn.addEventListener("click", () => {
         showAnswers = !showAnswers;
