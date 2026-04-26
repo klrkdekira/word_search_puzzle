@@ -278,8 +278,14 @@
 
       ctx.fillStyle = "#000000";
       ctx.textAlign = "center";
-      ctx.font = "bold 48px Arial, sans-serif";
-      ctx.fillText(getRenderedTitle(), width / 2, titleY);
+      const renderedTitle = getRenderedTitle();
+      let titleFontSize = 48;
+      while (titleFontSize > 24) {
+        ctx.font = `bold ${titleFontSize}px Arial, sans-serif`;
+        if (ctx.measureText(renderedTitle).width <= width - 80) break;
+        titleFontSize -= 2;
+      }
+      ctx.fillText(renderedTitle, width / 2, titleY);
 
       ctx.font = "bold 28px Arial, sans-serif";
       ctx.fillText(showAnswers ? "ANSWER KEY" : "UNSOLVED PUZZLE", width / 2, subtitleY);
@@ -337,7 +343,7 @@
     function updateToggleLabel() {
       toggleBtn.textContent = showAnswers ? "Hide Answers" : "Show Answers";
       const state = showAnswers ? "ANSWER KEY" : "UNSOLVED PUZZLE";
-      canvas.setAttribute("aria-label", `${getRenderedTitle()} word search puzzle grid - ${state}`);
+      canvas.setAttribute("aria-label", `${puzzleTitle} word search puzzle grid - ${state}`);
     }
 
     function downloadImage() {
