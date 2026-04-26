@@ -1,69 +1,67 @@
-# SPEC.md: Client-Side Word Search Generator (Food Microbiology)
+# SPEC.md: Client-Side Word Search Generator
 
 ## 1. Project Overview
-The objective is to develop a single-page frontend application (HTML/CSS/JS) that dynamically generates a word search puzzle from a hardcoded list of 15 food microbiology terms. The application must render the puzzle using the HTML5 Canvas API, allowing users to view the unsolved puzzle, toggle the answer key, and download the resulting configurations as image files (PNG/JPEG).
+A single-page frontend application (HTML/CSS/JS) that generates a word search puzzle from user-supplied words and hints entered via a textarea. The application renders the puzzle on an HTML5 Canvas, supports toggling the answer key, and allows downloading the result as a PNG image.
 
-## 2. Terminology & Content
-The generator must use the following 15 uppercase strings.
+## 2. Input Format
+Words and hints are entered one per line in a `<textarea>`:
+- Leading contiguous uppercase letters (`[A-Z]+`) are parsed as the puzzle **word**.
+- The remainder of the line (trimmed) is the **hint** text displayed below the grid.
+- Blank lines and lines with no leading uppercase letters are ignored.
 
-| Term | Count | Term | Count |
-| :--- | :--- | :--- | :--- |
-| **CROSSCONTAMINATION** | 18 | **SPORES** | 6 |
-| **THERMALDESTRUCTION** | 18 | **DVALUE** | 6 |
-| **HURDLETECHNOLOGY** | 16 | **ZVALUE** | 6 |
-| **BACILLUSCEREUS** | 14 | **LISTERIA** | 8 |
-| **BACTERIOCIN** | 11 | **BIOFILM** | 7 |
-| **ATPTESTING** | 10 | **AMR** | 3 |
-| **SANITATION** | 10 | **VBNC** | 4 |
-| **SWABBING** | 8 | | |
+**Example:**
+```
+BIOFILM A protective microbial community attached to food contact surfaces that resists sanitizers
+SPORES Dormant heat-resistant survival structures produced by certain bacteria
+LISTERIA A foodborne pathogen that can survive and grow under refrigeration temperature
+BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cooked rice
+```
 
 ## 3. Algorithm Requirements
 
 ### 3.1 Grid Constraints
-* **Dimensions:** Fixed at 25 × 25 characters.
-* **Allowed Orientations:** Strictly limited to the cardinal points.
-  * Horizontal (Forward & Backward)
-  * Vertical (Forward & Upward)
-* **Strict Rule:** No diagonal placements allowed.
+* **Dimensions:** `GRID_SIZE = maxWordLength + padding × 2` (square grid, same for X and Y).
+  * `maxWordLength` = length of the longest parsed word.
+  * `padding` = user-configurable integer input, default `2`.
+* **Allowed Orientations:** Cardinal directions only (horizontal and vertical, both forward and backward). No diagonals.
 
 ### 3.2 Placement Logic
-1. Initialize a empty 2D array of size 25 × 25.
+1. Initialize an empty `GRID_SIZE × GRID_SIZE` 2D array.
 2. Sort words by length descending.
-3. For each word, attempt placement up to 200 times at random coordinates and orientations. Store successful placements in a `solutionMap`.
-4. If a conflict arises, re-roll the coordinate/orientation. Overlapping words sharing a letter are allowed.
-5. After all 15 words are placed, fill remaining cells with random uppercase letters (A–Z).
+3. For each word, attempt up to `MAX_ATTEMPTS_PER_WORD` (300) random placements. For each valid candidate (no out-of-bounds, no letter conflict), compute an **intersection score** — the count of cells already occupied by the matching letter. After sampling, select the candidate with the **highest intersection score** to encourage word overlaps.
+4. If no valid placement is found for any word, discard the board and restart (up to `MAX_FULL_PUZZLE_ATTEMPTS = 50` retries).
+5. After all words are placed, fill remaining empty cells with random uppercase letters (A–Z).
 
-## 4. Client-Side Image Generation Specs (HTML5 Canvas)
+## 4. Canvas Rendering
 
-The application must use a hidden or visible `<canvas>` element to draw the puzzle worksheet. The visual layout described in text must be strictly implemented by the Canvas `DrawingContext2D`.
+### 4.1 Layout (Top to Bottom)
+1. **Title** — Rendered from the title input field, uppercased, bold sans-serif, centered. Font size scales down to fit canvas width.
+2. **Subtitle** — Only rendered when answers are visible: `"ANSWER KEY"`, centered below the title. Not shown otherwise.
+3. **Grid** — Centered on the canvas. Cell size is computed as `min(MAX_CELL_SIZE=42, floor((CANVAS_WIDTH − 80) / GRID_SIZE))`, minimum `18px`. Letter font is a bold monospaced font (Courier New) sized proportional to the cell.
+4. **Answer highlights** — When answers are shown, semi-transparent red rectangles (`#FF000055`) are drawn behind each word's cells before drawing letters.
+5. **Hints section** — Rendered below the grid. Each line shows the hint text. When answers are visible, the word is prepended: `WORD — hint text`. Long hints wrap within the canvas margins.
 
-### 4.1 Drawing Environment & Layout
-* **Canvas Size:** Sufficient for high resolution (e.g., 1200x1600 pixels).
-* **Font:** Use a bold, **monospaced** font (e.g., `30px "Courier New"`) for the grid letters to ensure perfect grid alignment.
-* **Colors:** Background: `#FFFFFF`. Text: `#000000`.
-
-### 4.2 Worksheet Layout Components (Top to Bottom)
-
-#### A. Header Section
-1. **Title:** "FOOD MICROBIOLOGY WORD SEARCH"
-   * Center-aligned, bold, sans-serif font (e.g., Arial), large size.
-2. **Subtitle:** Either "UNSOLVED PUZZLE" or "ANSWER KEY".
-   * Center-aligned, smaller size.
-
-#### B. The Grid Section
-1. **Rendering:** Centered on the canvas. Loop through the 25 × 25 array, drawing letters at calculated `(x, y)` coordinates with ample line-height and letter-spacing.
-2. **Solution Logic:** When rendering the **Answer Key** version:
-   * Before drawing the letters, access the `solutionMap`. Draw semi-transparent colored rectangles (e.g., Light Red `#FF000055`) over the specific cells containing words from the list.
-
-#### C. Footer Section (Word Bank)
-1. **Layout:** organize the 15 words into three columns below the grid.
-2. **Rendering:** Standard sans-serif font, left-aligned within each column.
+### 4.2 Canvas Sizing
+- Width: fixed at `1200px`.
+- Height: computed dynamically before each render to exactly fit the title, optional subtitle, grid, and hints sections without overflow.
 
 ### 4.3 Output & Interactivity
-* **UI Controls:** Buttons for "Generate New Puzzle", "Show/Hide Answers", and "Download Image".
-* **Export Logic:** Use `canvas.toDataURL("image/png")` to generate a base64 string and programmatically create a download link to save the final image locally.
+* **Generate New Puzzle** — Re-parses the textarea and regenerates the puzzle. Does not auto-regenerate while typing.
+* **Show/Hide Answers** — Toggles answer highlights and word prefixes in the hints section. Re-renders the canvas without regenerating.
+* **Download Image** — Exports the current canvas state as PNG via `canvas.toDataURL("image/png")`.
 
-## 5. Summary of Technical Stack
+## 5. UI Controls
+
+| Control | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| Puzzle title | `<input type="text">` | `"Word Search"` | Canvas title text |
+| Words & hints | `<textarea>` | Example terms | One word+hint per line |
+| Grid padding | `<input type="number">` | `2` | Extra cells added on each side beyond the longest word |
+| Generate New Puzzle | `<button>` | — | Triggers re-parse and regeneration |
+| Show/Hide Answers | `<button>` | — | Toggles answer display |
+| Download Image | `<button>` | — | Downloads current canvas as PNG |
+
+## 6. Technical Stack
 * **Language:** JavaScript (ES6+), running entirely in the user's browser.
 * **Rendering Engine:** HTML5 Canvas API (`getContext('2d')`).
 * **Packaging:** Single `index.html` file containing HTML, CSS, and JS.

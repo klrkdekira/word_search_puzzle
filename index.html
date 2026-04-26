@@ -1,219 +1,253 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Word Search Puzzle Generator</title>
-  <style>
-    :root {
-      color-scheme: light;
-    }
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f5f5f5;
-      color: #111;
-      display: flex;
-      min-height: 100vh;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      box-sizing: border-box;
-    }
-    .app {
-      width: min(100%, 1400px);
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-      padding: 20px;
-      display: flex;
-      gap: 20px;
-      align-items: flex-start;
-    }
-    .sidebar {
-      width: 260px;
-      flex-shrink: 0;
-    }
-    .canvas-panel {
-      flex: 1;
-      min-width: 0;
-    }
-    .field {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin-bottom: 12px;
-    }
-    .field label {
-      font-size: 14px;
-      font-weight: 700;
-    }
-    .field input {
-      border: 1px solid #d0d7de;
-      border-radius: 8px;
-      padding: 10px 12px;
-      font-size: 14px;
-      font-family: inherit;
-    }
-    .controls {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-bottom: 16px;
-    }
-    button {
-      border: none;
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      color: #fff;
-      background: #1f6feb;
-      width: 100%;
-    }
-    button:hover {
-      background: #185abc;
-    }
-    .canvas-wrap {
-      overflow: auto;
-      border: 1px solid #e5e5e5;
-      border-radius: 10px;
-    }
-    .status {
-      min-height: 20px;
-      margin-bottom: 10px;
-      color: #b00020;
-      font-size: 14px;
-      font-weight: 600;
-    }
-    canvas {
-      width: 100%;
-      height: auto;
-      display: block;
-      background: #fff;
-    }
-  </style>
-</head>
-<body>
-  <main class="app">
-    <aside class="sidebar">
-      <div class="field">
-        <label for="titleInput">Puzzle title</label>
-        <input id="titleInput" type="text" value="Food Microbiology Word Search" />
-      </div>
-      <div class="controls">
-        <button id="generateBtn" type="button">Generate New Puzzle</button>
-        <button id="toggleBtn" type="button">Show Answers</button>
-        <button id="downloadBtn" type="button">Download Image</button>
-      </div>
-      <div id="statusMsg" class="status" aria-live="polite"></div>
-    </aside>
-    <section class="canvas-panel">
-      <div class="canvas-wrap">
-        <canvas id="puzzleCanvas" width="1200" height="1600" aria-label="Word search puzzle grid - UNSOLVED PUZZLE"></canvas>
-      </div>
-    </section>
-  </main>
-
-  <script>
-    const TERMS = [
-      "CROSSCONTAMINATION",
-      "THERMALDESTRUCTION",
-      "HURDLETECHNOLOGY",
-      "BACILLUSCEREUS",
-      "BACTERIOCIN",
-      "ATPTESTING",
-      "SANITATION",
-      "SWABBING",
-      "SPORES",
-      "DVALUE",
-      "ZVALUE",
-      "LISTERIA",
-      "BIOFILM",
-      "AMR",
-      "VBNC",
-    ];
-
-    const GRID_SIZE = 25;
-    const MAX_ATTEMPTS_PER_WORD = 200;
-    const MAX_FULL_PUZZLE_ATTEMPTS = 250;
-    const ANSWER_HIGHLIGHT_COLOR = "#FF000055";
-    const CELL_SIZE_PX = 38;
-    const GRID_TEXT_OFFSET_X = 7;
-    const TEXT_VERTICAL_CENTER_DIVISOR = 2;
-    const GRID_START_Y = 170;
-    const WORD_LIST_TOP_MARGIN = 60;
-    const WORD_LIST_ROW_HEIGHT = 34;
-    const CARDINAL_ORIENTATIONS = [
-      { name: "right", dx: 1, dy: 0 },
-      { name: "left", dx: -1, dy: 0 },
-      { name: "down", dx: 0, dy: 1 },
-      { name: "up", dx: 0, dy: -1 },
-    ];
-    const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
-    const canvas = document.getElementById("puzzleCanvas");
-    const ctx = canvas.getContext("2d");
-    const generateBtn = document.getElementById("generateBtn");
-    const toggleBtn = document.getElementById("toggleBtn");
-    const downloadBtn = document.getElementById("downloadBtn");
-    const titleInput = document.getElementById("titleInput");
-    const statusMsg = document.getElementById("statusMsg");
-    const DEFAULT_TITLE = "Food Microbiology Word Search";
-
-    let grid = [];
-    let solutionMap = [];
-    let showAnswers = false;
-    let puzzleTitle = DEFAULT_TITLE;
-
-    function normalizeTitle(value) {
-      const title = value.trim();
-      return title || DEFAULT_TITLE;
-    }
-
-    function makeFilenameBase() {
-      const slug = puzzleTitle
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-+|-+$/g, "");
-      return slug || "word-search";
-    }
-
-    function getRenderedTitle() {
-      return puzzleTitle.toUpperCase();
-    }
-
-    function makeEmptyGrid() {
-      return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(""));
-    }
-
-    function randomInt(max) {
-      return Math.floor(Math.random() * max);
-    }
-
-    function randomLetter() {
-      return ALPHABET[randomInt(ALPHABET.length)];
-    }
-
-    function canPlaceWord(word, x, y, dx, dy, board) {
-      for (let i = 0; i < word.length; i++) {
-        const nx = x + i * dx;
-        const ny = y + i * dy;
-        if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) return false;
-        const cell = board[ny][nx];
-        if (cell && cell !== word[i]) return false;
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Word Search Puzzle Generator</title>
+    <style>
+      :root {
+        color-scheme: light;
       }
-      return true;
-    }
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #f5f5f5;
+        color: #111;
+        display: flex;
+        min-height: 100vh;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 20px;
+        box-sizing: border-box;
+      }
+      .app {
+        width: min(100%, 1400px);
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+      }
+      .sidebar {
+        width: 260px;
+        flex-shrink: 0;
+      }
+      .canvas-panel {
+        flex: 1;
+        min-width: 0;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        margin-bottom: 12px;
+      }
+      .field label {
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .field-hint {
+        margin: 0;
+        font-size: 12px;
+        color: #666;
+      }
+      .field input,
+      .field textarea {
+        border: 1px solid #d0d7de;
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 13px;
+        font-family: "Courier New", monospace;
+        resize: vertical;
+      }
+      .field input[type="number"] {
+        font-family: inherit;
+        width: 80px;
+      }
+      .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 16px;
+      }
+      button {
+        border: none;
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        color: #fff;
+        background: #1f6feb;
+        width: 100%;
+      }
+      button:hover {
+        background: #185abc;
+      }
+      .canvas-wrap {
+        overflow: auto;
+        border: 1px solid #e5e5e5;
+        border-radius: 10px;
+      }
+      .status {
+        min-height: 20px;
+        margin-bottom: 10px;
+        color: #b00020;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      canvas {
+        width: 100%;
+        height: auto;
+        display: block;
+        background: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="app">
+      <aside class="sidebar">
+        <div class="field">
+          <label for="titleInput">Puzzle title</label>
+          <input id="titleInput" type="text" value="Word Search" />
+        </div>
+        <div class="field">
+          <label for="termsTextarea">Words &amp; hints</label>
+          <p class="field-hint">
+            Each line: WORD hint text (uppercase letters at start = word)
+          </p>
+          <textarea id="termsTextarea" rows="12" spellcheck="false">
+BIOFILM A protective microbial community attached to food contact surfaces that resists sanitizers
+SPORES Dormant heat-resistant survival structures produced by certain bacteria
+LISTERIA A foodborne pathogen that can survive and grow under refrigeration temperature
+BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cooked rice</textarea
+          >
+        </div>
+        <div class="field">
+          <label for="paddingInput">Grid padding</label>
+          <input id="paddingInput" type="number" min="1" max="20" value="2" />
+        </div>
+        <div class="controls">
+          <button id="generateBtn" type="button">Generate New Puzzle</button>
+          <button id="toggleBtn" type="button">Show Answers</button>
+          <button id="downloadBtn" type="button">Download Image</button>
+        </div>
+        <div id="statusMsg" class="status" aria-live="polite"></div>
+      </aside>
+      <section class="canvas-panel">
+        <div class="canvas-wrap">
+          <canvas
+            id="puzzleCanvas"
+            aria-label="Word search puzzle grid"
+          ></canvas>
+        </div>
+      </section>
+    </main>
 
-    function placeWord(word, board) {
-      for (let attempt = 0; attempt < MAX_ATTEMPTS_PER_WORD; attempt++) {
-        const { dx, dy } = CARDINAL_ORIENTATIONS[randomInt(CARDINAL_ORIENTATIONS.length)];
-        const x = randomInt(GRID_SIZE);
-        const y = randomInt(GRID_SIZE);
-        if (!canPlaceWord(word, x, y, dx, dy, board)) continue;
+    <script>
+      const DEFAULT_TITLE = "Word Search";
+      const CANVAS_WIDTH = 1200;
+      const MAX_CELL_SIZE = 42;
+      const MIN_CELL_SIZE = 18;
+      const MAX_ATTEMPTS_PER_WORD = 300;
+      const MAX_FULL_PUZZLE_ATTEMPTS = 50;
+      const ANSWER_HIGHLIGHT_COLOR = "#FF000055";
+      const CARDINAL_ORIENTATIONS = [
+        { dx: 1, dy: 0 },
+        { dx: -1, dy: 0 },
+        { dx: 0, dy: 1 },
+        { dx: 0, dy: -1 },
+      ];
+      const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
+      const canvas = document.getElementById("puzzleCanvas");
+      const ctx = canvas.getContext("2d");
+      const generateBtn = document.getElementById("generateBtn");
+      const toggleBtn = document.getElementById("toggleBtn");
+      const downloadBtn = document.getElementById("downloadBtn");
+      const titleInput = document.getElementById("titleInput");
+      const termsTextarea = document.getElementById("termsTextarea");
+      const paddingInput = document.getElementById("paddingInput");
+      const statusMsg = document.getElementById("statusMsg");
+
+      let grid = [];
+      let solutionMap = [];
+      let currentTerms = [];
+      let currentGridSize = 10;
+      let showAnswers = false;
+      let puzzleTitle = DEFAULT_TITLE;
+
+      function parseTerms(text) {
+        return text
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.length > 0)
+          .map((line) => {
+            const match = line.match(/^([A-Z]+)(.*)/);
+            if (!match || match[1].length === 0) return null;
+            return { word: match[1], hint: match[2].trim() };
+          })
+          .filter(Boolean);
+      }
+
+      function computeGridSize(words, padding) {
+        if (words.length === 0) return 10;
+        const maxLen = Math.max(...words.map((w) => w.length));
+        return maxLen + padding * 2;
+      }
+
+      function computeCellSize(gridSize) {
+        const available = CANVAS_WIDTH - 80;
+        return Math.max(
+          MIN_CELL_SIZE,
+          Math.min(MAX_CELL_SIZE, Math.floor(available / gridSize)),
+        );
+      }
+
+      function makeEmptyGrid(size) {
+        return Array.from({ length: size }, () => Array(size).fill(""));
+      }
+
+      function randomInt(max) {
+        return Math.floor(Math.random() * max);
+      }
+
+      function randomLetter() {
+        return ALPHABET[randomInt(ALPHABET.length)];
+      }
+
+      function scorePlacement(word, x, y, dx, dy, board, gridSize) {
+        let intersections = 0;
+        for (let i = 0; i < word.length; i++) {
+          const nx = x + i * dx;
+          const ny = y + i * dy;
+          if (nx < 0 || nx >= gridSize || ny < 0 || ny >= gridSize) return null;
+          const cell = board[ny][nx];
+          if (cell && cell !== word[i]) return null;
+          if (cell === word[i]) intersections++;
+        }
+        return intersections;
+      }
+
+      function placeWord(word, board, gridSize) {
+        let bestScore = -1;
+        let bestPlacement = null;
+        for (let attempt = 0; attempt < MAX_ATTEMPTS_PER_WORD; attempt++) {
+          const { dx, dy } =
+            CARDINAL_ORIENTATIONS[randomInt(CARDINAL_ORIENTATIONS.length)];
+          const x = randomInt(gridSize);
+          const y = randomInt(gridSize);
+          const score = scorePlacement(word, x, y, dx, dy, board, gridSize);
+          if (score === null) continue;
+          if (score > bestScore) {
+            bestScore = score;
+            bestPlacement = { x, y, dx, dy };
+          }
+        }
+        if (!bestPlacement) return null;
+        const { x, y, dx, dy } = bestPlacement;
         const cells = [];
         for (let i = 0; i < word.length; i++) {
           const nx = x + i * dx;
@@ -221,176 +255,281 @@
           board[ny][nx] = word[i];
           cells.push({ x: nx, y: ny });
         }
-
         return { word, cells };
       }
 
-      return null;
-    }
-
-    function fillEmptyCells(board) {
-      for (let y = 0; y < GRID_SIZE; y++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
-          if (!board[y][x]) {
-            board[y][x] = randomLetter();
-          }
-        }
-      }
-    }
-
-    function generatePuzzle() {
-      const sortedWords = [...TERMS].sort((a, b) => b.length - a.length);
-
-      for (let attempt = 0; attempt < MAX_FULL_PUZZLE_ATTEMPTS; attempt++) {
-        const board = makeEmptyGrid();
-        const placed = [];
-        let allPlaced = true;
-
-        for (const word of sortedWords) {
-          const result = placeWord(word, board);
-          if (!result) {
-            allPlaced = false;
-            break;
-          }
-          placed.push(result);
-        }
-
-        if (!allPlaced) continue;
-        fillEmptyCells(board);
-        grid = board;
-        solutionMap = placed;
-        return;
-      }
-
-      throw new Error(
-        `Unable to generate a valid puzzle after ${MAX_FULL_PUZZLE_ATTEMPTS} attempts. Please try generating a new puzzle.`
-      );
-    }
-
-    function renderPuzzle() {
-      const width = canvas.width;
-      const height = canvas.height;
-      const titleY = 70;
-      const subtitleY = 120;
-
-      ctx.fillStyle = "#FFFFFF";
-      ctx.fillRect(0, 0, width, height);
-
-      ctx.fillStyle = "#000000";
-      ctx.textAlign = "center";
-      const renderedTitle = getRenderedTitle();
-      let titleFontSize = 48;
-      while (titleFontSize > 24) {
-        ctx.font = `bold ${titleFontSize}px Arial, sans-serif`;
-        if (ctx.measureText(renderedTitle).width <= width - 80) break;
-        titleFontSize -= 2;
-      }
-      ctx.fillText(renderedTitle, width / 2, titleY);
-
-      ctx.font = "bold 28px Arial, sans-serif";
-      ctx.fillText(showAnswers ? "ANSWER KEY" : "UNSOLVED PUZZLE", width / 2, subtitleY);
-
-      const cellSize = CELL_SIZE_PX;
-      const textVerticalOffset = cellSize / TEXT_VERTICAL_CENTER_DIVISOR;
-      const gridPixelSize = GRID_SIZE * cellSize;
-      const gridStartX = Math.floor((width - gridPixelSize) / 2);
-      const gridStartY = GRID_START_Y;
-
-      if (showAnswers) {
-        for (const placement of solutionMap) {
-          ctx.fillStyle = ANSWER_HIGHLIGHT_COLOR;
-          for (const cell of placement.cells) {
-            ctx.fillRect(
-              gridStartX + cell.x * cellSize + 1,
-              gridStartY + cell.y * cellSize + 1,
-              cellSize - 2,
-              cellSize - 2
-            );
+      function fillEmptyCells(board, gridSize) {
+        for (let row = 0; row < gridSize; row++) {
+          for (let col = 0; col < gridSize; col++) {
+            if (!board[row][col]) board[row][col] = randomLetter();
           }
         }
       }
 
-      ctx.textAlign = "left";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = "#000000";
-      ctx.font = 'bold 30px "Courier New", monospace';
+      function generatePuzzle(terms, padding) {
+        const sortedTerms = [...terms].sort(
+          (a, b) => b.word.length - a.word.length,
+        );
+        const words = sortedTerms.map((t) => t.word);
+        const gridSize = computeGridSize(words, padding);
+        for (let attempt = 0; attempt < MAX_FULL_PUZZLE_ATTEMPTS; attempt++) {
+          const board = makeEmptyGrid(gridSize);
+          const placed = [];
+          let allPlaced = true;
+          for (const word of words) {
+            const result = placeWord(word, board, gridSize);
+            if (!result) {
+              allPlaced = false;
+              break;
+            }
+            placed.push(result);
+          }
+          if (!allPlaced) continue;
+          fillEmptyCells(board, gridSize);
+          return { grid: board, solutionMap: placed, gridSize };
+        }
+        throw new Error(
+          `Unable to place all words after ${MAX_FULL_PUZZLE_ATTEMPTS} attempts. Try increasing the grid padding.`,
+        );
+      }
 
-      for (let y = 0; y < GRID_SIZE; y++) {
-        for (let x = 0; x < GRID_SIZE; x++) {
-          const px = gridStartX + x * cellSize + GRID_TEXT_OFFSET_X;
-          const py = gridStartY + y * cellSize + textVerticalOffset;
-          ctx.fillText(grid[y][x], px, py);
+      function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+        const words = text.split(" ");
+        let line = "";
+        let lineY = y;
+        for (const word of words) {
+          const test = line ? line + " " + word : word;
+          if (ctx.measureText(test).width > maxWidth && line) {
+            ctx.fillText(line, x, lineY);
+            line = word;
+            lineY += lineHeight;
+          } else {
+            line = test;
+          }
+        }
+        if (line) {
+          ctx.fillText(line, x, lineY);
+          lineY += lineHeight;
+        }
+        return lineY;
+      }
+
+      function measureHintsHeight(terms, answersVisible, maxWidth, lineHeight) {
+        ctx.font = "22px Arial, sans-serif";
+        let total = 0;
+        for (const { word, hint } of terms) {
+          const text = answersVisible ? `${word} \u2014 ${hint}` : hint;
+          const words = text.split(" ");
+          let line = "";
+          let lineCount = 1;
+          for (const w of words) {
+            const test = line ? line + " " + w : w;
+            if (ctx.measureText(test).width > maxWidth && line) {
+              lineCount++;
+              line = w;
+            } else {
+              line = test;
+            }
+          }
+          total += lineCount * lineHeight + 8;
+        }
+        return total;
+      }
+
+      function normalizeTitle(value) {
+        const title = value.trim();
+        return title || DEFAULT_TITLE;
+      }
+
+      function getRenderedTitle() {
+        return puzzleTitle.toUpperCase();
+      }
+
+      function makeFilenameBase() {
+        const slug = puzzleTitle
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "");
+        return slug || "word-search";
+      }
+
+      function renderPuzzle() {
+        if (currentTerms.length === 0 || grid.length === 0) return;
+
+        const terms = currentTerms;
+        const gridSize = currentGridSize;
+        const cellSize = computeCellSize(gridSize);
+        const gridPixelSize = gridSize * cellSize;
+
+        const TITLE_FONT_SIZE = 48;
+        const HEADER_HEIGHT = TITLE_FONT_SIZE + 30;
+        const SUBTITLE_HEIGHT = showAnswers ? 44 : 0;
+        const GRID_TOP_MARGIN = 20;
+        const HINT_LINE_HEIGHT = 32;
+        const HINT_MARGIN_X = 50;
+        const HINTS_TOP_MARGIN = 50;
+        const CANVAS_BOTTOM_MARGIN = 40;
+        const maxHintWidth = CANVAS_WIDTH - HINT_MARGIN_X * 2;
+
+        const hintsHeight = measureHintsHeight(
+          terms,
+          showAnswers,
+          maxHintWidth,
+          HINT_LINE_HEIGHT,
+        );
+
+        const gridStartY = HEADER_HEIGHT + SUBTITLE_HEIGHT + GRID_TOP_MARGIN;
+        const canvasHeight =
+          gridStartY +
+          gridPixelSize +
+          HINTS_TOP_MARGIN +
+          hintsHeight +
+          CANVAS_BOTTOM_MARGIN;
+
+        canvas.width = CANVAS_WIDTH;
+        canvas.height = Math.ceil(canvasHeight);
+
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, CANVAS_WIDTH, canvas.height);
+
+        ctx.fillStyle = "#000000";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "alphabetic";
+
+        const renderedTitle = getRenderedTitle();
+        let titleFS = TITLE_FONT_SIZE;
+        while (titleFS > 24) {
+          ctx.font = `bold ${titleFS}px Arial, sans-serif`;
+          if (ctx.measureText(renderedTitle).width <= CANVAS_WIDTH - 80) break;
+          titleFS -= 2;
+        }
+        ctx.fillText(renderedTitle, CANVAS_WIDTH / 2, titleFS + 20);
+
+        if (showAnswers) {
+          ctx.font = "bold 28px Arial, sans-serif";
+          ctx.fillText("ANSWER KEY", CANVAS_WIDTH / 2, HEADER_HEIGHT + 32);
+        }
+
+        const gridStartX = Math.floor((CANVAS_WIDTH - gridPixelSize) / 2);
+
+        if (showAnswers) {
+          for (const placement of solutionMap) {
+            ctx.fillStyle = ANSWER_HIGHLIGHT_COLOR;
+            for (const cell of placement.cells) {
+              ctx.fillRect(
+                gridStartX + cell.x * cellSize + 1,
+                gridStartY + cell.y * cellSize + 1,
+                cellSize - 2,
+                cellSize - 2,
+              );
+            }
+          }
+        }
+
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#000000";
+        const gridFontSize = Math.max(12, Math.floor(cellSize * 0.72));
+        ctx.font = `bold ${gridFontSize}px "Courier New", monospace`;
+        const textOffsetX = Math.floor(cellSize * 0.15);
+
+        for (let row = 0; row < gridSize; row++) {
+          for (let col = 0; col < gridSize; col++) {
+            const px = gridStartX + col * cellSize + textOffsetX;
+            const py = gridStartY + row * cellSize + cellSize / 2;
+            ctx.fillText(grid[row][col], px, py);
+          }
+        }
+
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+        ctx.fillStyle = "#000000";
+        ctx.font = "22px Arial, sans-serif";
+
+        let currentY = gridStartY + gridPixelSize + HINTS_TOP_MARGIN;
+        for (const { word, hint } of terms) {
+          const text = showAnswers ? `${word} \u2014 ${hint}` : hint;
+          currentY = wrapText(
+            ctx,
+            text,
+            HINT_MARGIN_X,
+            currentY,
+            maxHintWidth,
+            HINT_LINE_HEIGHT,
+          );
+          currentY += 8;
         }
       }
 
-      const wordsTop = gridStartY + gridPixelSize + WORD_LIST_TOP_MARGIN;
-      const columns = 3;
-      const rowsPerColumn = Math.ceil(TERMS.length / columns);
-      const colWidth = width / columns;
-
-      ctx.font = "24px Arial, sans-serif";
-      ctx.textBaseline = "alphabetic";
-
-      for (let i = 0; i < TERMS.length; i++) {
-        const col = Math.floor(i / rowsPerColumn);
-        const row = i % rowsPerColumn;
-        const x = col * colWidth + 30;
-        const y = wordsTop + row * WORD_LIST_ROW_HEIGHT;
-        ctx.fillText(TERMS[i], x, y);
+      function updateToggleLabel() {
+        toggleBtn.textContent = showAnswers ? "Hide Answers" : "Show Answers";
+        canvas.setAttribute(
+          "aria-label",
+          `${puzzleTitle} word search puzzle grid${
+            showAnswers ? " - ANSWER KEY" : ""
+          }`,
+        );
       }
-    }
 
-    function updateToggleLabel() {
-      toggleBtn.textContent = showAnswers ? "Hide Answers" : "Show Answers";
-      const state = showAnswers ? "ANSWER KEY" : "UNSOLVED PUZZLE";
-      canvas.setAttribute("aria-label", `${puzzleTitle} word search puzzle grid - ${state}`);
-    }
+      function downloadImage() {
+        const url = canvas.toDataURL("image/png");
+        const link = document.createElement("a");
+        link.href = url;
+        const filenameBase = makeFilenameBase();
+        link.download = showAnswers
+          ? `${filenameBase}-answer-key.png`
+          : `${filenameBase}-word-search.png`;
+        link.click();
+      }
 
-    function downloadImage() {
-      const url = canvas.toDataURL("image/png");
-      const link = document.createElement("a");
-      link.href = url;
-      const filenameBase = makeFilenameBase();
-      link.download = showAnswers ? `${filenameBase}-answer-key.png` : `${filenameBase}-word-search.png`;
-      link.click();
-    }
+      function setStatus(message) {
+        statusMsg.textContent = message;
+      }
 
-    function setStatus(message) {
-      statusMsg.textContent = message;
-    }
+      function safeGenerateAndRender() {
+        const terms = parseTerms(termsTextarea.value);
+        if (terms.length === 0) {
+          setStatus(
+            "No valid words found. Each line should start with uppercase letters.",
+          );
+          return;
+        }
+        const padding = Math.max(1, parseInt(paddingInput.value, 10) || 2);
+        try {
+          const result = generatePuzzle(terms, padding);
+          grid = result.grid;
+          solutionMap = result.solutionMap;
+          currentTerms = terms;
+          currentGridSize = result.gridSize;
+          setStatus("");
+          renderPuzzle();
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : "Unexpected error.";
+          console.error(err);
+          setStatus(message);
+        }
+      }
 
-    function safeGenerateAndRender() {
-      try {
-        generatePuzzle();
-        setStatus("");
+      generateBtn.addEventListener("click", safeGenerateAndRender);
+
+      toggleBtn.addEventListener("click", () => {
+        showAnswers = !showAnswers;
+        updateToggleLabel();
         renderPuzzle();
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unexpected error while generating puzzle.";
-        console.error(error);
-        setStatus(message);
-      }
-    }
+      });
 
-    generateBtn.addEventListener("click", () => {
-      safeGenerateAndRender();
-    });
+      downloadBtn.addEventListener("click", downloadImage);
 
-    toggleBtn.addEventListener("click", () => {
-      showAnswers = !showAnswers;
-      updateToggleLabel();
-      renderPuzzle();
-    });
+      titleInput.addEventListener("input", () => {
+        puzzleTitle = normalizeTitle(titleInput.value);
+        updateToggleLabel();
+        renderPuzzle();
+      });
 
-    downloadBtn.addEventListener("click", downloadImage);
-    titleInput.addEventListener("input", () => {
       puzzleTitle = normalizeTitle(titleInput.value);
       updateToggleLabel();
-      renderPuzzle();
-    });
-
-    puzzleTitle = normalizeTitle(titleInput.value);
-    updateToggleLabel();
-    safeGenerateAndRender();
-  </script>
-</body>
+      safeGenerateAndRender();
+    </script>
+  </body>
 </html>
