@@ -66,6 +66,20 @@
         font-family: inherit;
         width: 80px;
       }
+      .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 14px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .checkbox-label input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: #1f6feb;
+      }
       .controls {
         display: flex;
         flex-direction: column;
@@ -129,6 +143,12 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
           <label for="paddingInput">Grid padding</label>
           <input id="paddingInput" type="number" min="1" max="20" value="2" />
         </div>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" id="allowReverseCheck" />
+            Allow reversed words
+          </label>
+        </div>
         <div class="controls">
           <button id="generateBtn" type="button">Generate New Puzzle</button>
           <button id="toggleBtn" type="button">Show Answers</button>
@@ -153,12 +173,27 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
       const MIN_CELL_SIZE = 18;
       const MAX_ATTEMPTS_PER_WORD = 300;
       const MAX_FULL_PUZZLE_ATTEMPTS = 50;
-      const ANSWER_HIGHLIGHT_COLOR = "#FF000055";
-      const CARDINAL_ORIENTATIONS = [
+      const ORIENTATIONS_FORWARD = [
+        { dx: 1, dy: 0 },
+        { dx: 0, dy: 1 },
+      ];
+      const ORIENTATIONS_ALL = [
         { dx: 1, dy: 0 },
         { dx: -1, dy: 0 },
         { dx: 0, dy: 1 },
         { dx: 0, dy: -1 },
+      ];
+      const ANSWER_PALETTE = [
+        { fill: "rgba(220,50,50,0.2)", stroke: "rgba(200,30,30,0.9)" },
+        { fill: "rgba(30,140,200,0.2)", stroke: "rgba(20,110,180,0.9)" },
+        { fill: "rgba(30,160,100,0.2)", stroke: "rgba(20,130,80,0.9)" },
+        { fill: "rgba(160,60,200,0.2)", stroke: "rgba(130,40,170,0.9)" },
+        { fill: "rgba(200,130,10,0.25)", stroke: "rgba(170,100,0,0.9)" },
+        { fill: "rgba(20,160,160,0.2)", stroke: "rgba(10,130,130,0.9)" },
+        { fill: "rgba(220,80,150,0.2)", stroke: "rgba(190,50,120,0.9)" },
+        { fill: "rgba(80,120,200,0.2)", stroke: "rgba(50,90,180,0.9)" },
+        { fill: "rgba(50,170,80,0.2)", stroke: "rgba(30,140,60,0.9)" },
+        { fill: "rgba(200,80,30,0.2)", stroke: "rgba(170,50,10,0.9)" },
       ];
       const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -170,6 +205,7 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
       const titleInput = document.getElementById("titleInput");
       const termsTextarea = document.getElementById("termsTextarea");
       const paddingInput = document.getElementById("paddingInput");
+      const allowReverseCheck = document.getElementById("allowReverseCheck");
       const statusMsg = document.getElementById("statusMsg");
 
       let grid = [];
@@ -231,12 +267,11 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
         return intersections;
       }
 
-      function placeWord(word, board, gridSize) {
+      function placeWord(word, board, gridSize, orientations) {
         let bestScore = -1;
         let bestPlacement = null;
         for (let attempt = 0; attempt < MAX_ATTEMPTS_PER_WORD; attempt++) {
-          const { dx, dy } =
-            CARDINAL_ORIENTATIONS[randomInt(CARDINAL_ORIENTATIONS.length)];
+          const { dx, dy } = orientations[randomInt(orientations.length)];
           const x = randomInt(gridSize);
           const y = randomInt(gridSize);
           const score = scorePlacement(word, x, y, dx, dy, board, gridSize);
@@ -266,7 +301,7 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
         }
       }
 
-      function generatePuzzle(terms, padding) {
+      function generatePuzzle(terms, padding, orientations) {
         const sortedTerms = [...terms].sort(
           (a, b) => b.word.length - a.word.length,
         );
@@ -277,7 +312,7 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
           const placed = [];
           let allPlaced = true;
           for (const word of words) {
-            const result = placeWord(word, board, gridSize);
+            const result = placeWord(word, board, gridSize, orientations);
             if (!result) {
               allPlaced = false;
               break;
@@ -291,6 +326,40 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
         throw new Error(
           `Unable to place all words after ${MAX_FULL_PUZZLE_ATTEMPTS} attempts. Try increasing the grid padding.`,
         );
+      }
+
+      // wrapTextOffset: draws text starting at (x + firstLineOffset, y) for the first
+      // line, then wraps subsequent lines starting at x.
+      function wrapTextOffset(
+        ctx,
+        text,
+        x,
+        firstLineOffset,
+        y,
+        maxWidth,
+        lineHeight,
+      ) {
+        const words = text.split(" ");
+        let line = "";
+        let lineY = y;
+        let isFirst = true;
+        for (const word of words) {
+          const test = line ? line + " " + word : word;
+          const avail = isFirst ? maxWidth - firstLineOffset : maxWidth;
+          if (ctx.measureText(test).width > avail && line) {
+            ctx.fillText(line, isFirst ? x + firstLineOffset : x, lineY);
+            line = word;
+            lineY += lineHeight;
+            isFirst = false;
+          } else {
+            line = test;
+          }
+        }
+        if (line) {
+          ctx.fillText(line, isFirst ? x + firstLineOffset : x, lineY);
+          lineY += lineHeight;
+        }
+        return lineY;
       }
 
       function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
@@ -413,17 +482,28 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
         const gridStartX = Math.floor((CANVAS_WIDTH - gridPixelSize) / 2);
 
         if (showAnswers) {
-          for (const placement of solutionMap) {
-            ctx.fillStyle = ANSWER_HIGHLIGHT_COLOR;
-            for (const cell of placement.cells) {
-              ctx.fillRect(
-                gridStartX + cell.x * cellSize + 1,
-                gridStartY + cell.y * cellSize + 1,
-                cellSize - 2,
-                cellSize - 2,
-              );
-            }
-          }
+          solutionMap.forEach((placement, idx) => {
+            const color = ANSWER_PALETTE[idx % ANSWER_PALETTE.length];
+            const cells = placement.cells;
+            if (cells.length === 0) return;
+            const xs = cells.map((c) => c.x);
+            const ys = cells.map((c) => c.y);
+            const minX = Math.min(...xs);
+            const minY = Math.min(...ys);
+            const maxX = Math.max(...xs);
+            const maxY = Math.max(...ys);
+            const rx = gridStartX + minX * cellSize + 2;
+            const ry = gridStartY + minY * cellSize + 2;
+            const rw = (maxX - minX + 1) * cellSize - 4;
+            const rh = (maxY - minY + 1) * cellSize - 4;
+            ctx.beginPath();
+            ctx.roundRect(rx, ry, rw, rh, 6);
+            ctx.fillStyle = color.fill;
+            ctx.fill();
+            ctx.strokeStyle = color.stroke;
+            ctx.lineWidth = 2.5;
+            ctx.stroke();
+          });
         }
 
         ctx.textAlign = "left";
@@ -446,17 +526,40 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
         ctx.fillStyle = "#000000";
         ctx.font = "22px Arial, sans-serif";
 
+        const wordColorIndex = new Map();
+        solutionMap.forEach((p, i) => wordColorIndex.set(p.word, i));
+
         let currentY = gridStartY + gridPixelSize + HINTS_TOP_MARGIN;
+        ctx.textBaseline = "alphabetic";
         for (const { word, hint } of terms) {
-          const text = showAnswers ? `${word} \u2014 ${hint}` : hint;
-          currentY = wrapText(
-            ctx,
-            text,
-            HINT_MARGIN_X,
-            currentY,
-            maxHintWidth,
-            HINT_LINE_HEIGHT,
-          );
+          if (showAnswers) {
+            const cidx = wordColorIndex.has(word)
+              ? wordColorIndex.get(word) % ANSWER_PALETTE.length
+              : 0;
+            const prefix = `${word} \u2014 `;
+            const prefixWidth = ctx.measureText(prefix).width;
+            ctx.fillStyle = ANSWER_PALETTE[cidx].stroke;
+            ctx.fillText(prefix, HINT_MARGIN_X, currentY);
+            ctx.fillStyle = "#000000";
+            currentY = wrapTextOffset(
+              ctx,
+              hint,
+              HINT_MARGIN_X,
+              prefixWidth,
+              currentY,
+              maxHintWidth,
+              HINT_LINE_HEIGHT,
+            );
+          } else {
+            currentY = wrapText(
+              ctx,
+              hint,
+              HINT_MARGIN_X,
+              currentY,
+              maxHintWidth,
+              HINT_LINE_HEIGHT,
+            );
+          }
           currentY += 8;
         }
       }
@@ -495,8 +598,11 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
           return;
         }
         const padding = Math.max(1, parseInt(paddingInput.value, 10) || 2);
+        const orientations = allowReverseCheck.checked
+          ? ORIENTATIONS_ALL
+          : ORIENTATIONS_FORWARD;
         try {
-          const result = generatePuzzle(terms, padding);
+          const result = generatePuzzle(terms, padding, orientations);
           grid = result.grid;
           solutionMap = result.solutionMap;
           currentTerms = terms;
@@ -512,6 +618,7 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
       }
 
       generateBtn.addEventListener("click", safeGenerateAndRender);
+      allowReverseCheck.addEventListener("change", safeGenerateAndRender);
 
       toggleBtn.addEventListener("click", () => {
         showAnswers = !showAnswers;
