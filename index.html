@@ -195,9 +195,11 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
         { dx: 0, dy: 1 },
         { dx: 0, dy: -1 },
       ];
-      const ORIENTATIONS_DIAG = [
+      const ORIENTATIONS_DIAG_FORWARD = [
         { dx: 1, dy: 1 },
         { dx: -1, dy: 1 },
+      ];
+      const ORIENTATIONS_DIAG_REVERSE = [
         { dx: 1, dy: -1 },
         { dx: -1, dy: -1 },
       ];
@@ -700,7 +702,10 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
                 { dx: 0, dy: -1 },
               ]
             : []),
-          ...(allowDiagonalCheck.checked ? ORIENTATIONS_DIAG : []),
+          ...(allowDiagonalCheck.checked ? ORIENTATIONS_DIAG_FORWARD : []),
+          ...(allowDiagonalCheck.checked && allowReverseCheck.checked
+            ? ORIENTATIONS_DIAG_REVERSE
+            : []),
         ];
         const displayTerms = shuffleHintsCheck.checked
           ? [...terms].sort(() => Math.random() - 0.5)
