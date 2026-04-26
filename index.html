@@ -180,6 +180,10 @@
       return slug || "word-search";
     }
 
+    function getRenderedTitle() {
+      return puzzleTitle.toUpperCase();
+    }
+
     function makeEmptyGrid() {
       return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(""));
     }
@@ -275,7 +279,7 @@
       ctx.fillStyle = "#000000";
       ctx.textAlign = "center";
       ctx.font = "bold 48px Arial, sans-serif";
-      ctx.fillText(puzzleTitle, width / 2, titleY);
+      ctx.fillText(getRenderedTitle(), width / 2, titleY);
 
       ctx.font = "bold 28px Arial, sans-serif";
       ctx.fillText(showAnswers ? "ANSWER KEY" : "UNSOLVED PUZZLE", width / 2, subtitleY);
@@ -333,7 +337,7 @@
     function updateToggleLabel() {
       toggleBtn.textContent = showAnswers ? "Hide Answers" : "Show Answers";
       const state = showAnswers ? "ANSWER KEY" : "UNSOLVED PUZZLE";
-      canvas.setAttribute("aria-label", `${puzzleTitle} word search puzzle grid - ${state}`);
+      canvas.setAttribute("aria-label", `${getRenderedTitle()} word search puzzle grid - ${state}`);
     }
 
     function downloadImage() {
