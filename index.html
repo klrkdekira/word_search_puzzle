@@ -51,6 +51,13 @@
       border: 1px solid #e5e5e5;
       border-radius: 10px;
     }
+    .status {
+      min-height: 20px;
+      margin-bottom: 10px;
+      color: #b00020;
+      font-size: 14px;
+      font-weight: 600;
+    }
     canvas {
       width: 100%;
       height: auto;
@@ -66,8 +73,9 @@
       <button id="toggleBtn" type="button">Show Answers</button>
       <button id="downloadBtn" type="button">Download Image</button>
     </div>
+    <div id="statusMsg" class="status" aria-live="polite"></div>
     <div class="canvas-wrap">
-      <canvas id="puzzleCanvas" width="1200" height="1600"></canvas>
+      <canvas id="puzzleCanvas" width="1200" height="1600" aria-label="Food microbiology word search puzzle grid"></canvas>
     </div>
   </main>
 
@@ -92,6 +100,8 @@
 
     const GRID_SIZE = 25;
     const MAX_ATTEMPTS_PER_WORD = 200;
+    const MAX_FULL_PUZZLE_ATTEMPTS = 1000;
+    const ANSWER_HIGHLIGHT_COLOR = "#FF000055";
     const ORIENTATIONS = [
       { dx: 1, dy: 0 },
       { dx: -1, dy: 0 },
@@ -105,6 +115,7 @@
     const generateBtn = document.getElementById("generateBtn");
     const toggleBtn = document.getElementById("toggleBtn");
     const downloadBtn = document.getElementById("downloadBtn");
+    const statusMsg = document.getElementById("statusMsg");
 
     let grid = [];
     let solutionMap = [];
@@ -167,7 +178,7 @@
     function generatePuzzle() {
       const sortedWords = [...TERMS].sort((a, b) => b.length - a.length);
 
-      for (let restart = 0; restart < 1000; restart++) {
+      for (let attempt = 0; attempt < MAX_FULL_PUZZLE_ATTEMPTS; attempt++) {
         const board = makeEmptyGrid();
         const placed = [];
         let allPlaced = true;
@@ -188,7 +199,9 @@
         return;
       }
 
-      throw new Error("Unable to generate a valid puzzle after multiple attempts.");
+      throw new Error(
+        `Unable to generate a valid puzzle after ${MAX_FULL_PUZZLE_ATTEMPTS} attempts. Please try generating a new puzzle.`
+      );
     }
 
     function renderPuzzle() {
@@ -215,7 +228,7 @@
 
       if (showAnswers) {
         for (const placement of solutionMap) {
-          ctx.fillStyle = "#FF000055";
+          ctx.fillStyle = ANSWER_HIGHLIGHT_COLOR;
           for (const cell of placement.cells) {
             ctx.fillRect(
               gridStartX + cell.x * cellSize + 1,
@@ -266,14 +279,27 @@
       const link = document.createElement("a");
       link.href = url;
       link.download = showAnswers ? "food-microbiology-answer-key.png" : "food-microbiology-word-search.png";
-      document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
+    }
+
+    function setStatus(message) {
+      statusMsg.textContent = message;
+    }
+
+    function safeGenerateAndRender() {
+      try {
+        generatePuzzle();
+        setStatus("");
+        renderPuzzle();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Unexpected error while generating puzzle.";
+        console.error(error);
+        setStatus(message);
+      }
     }
 
     generateBtn.addEventListener("click", () => {
-      generatePuzzle();
-      renderPuzzle();
+      safeGenerateAndRender();
     });
 
     toggleBtn.addEventListener("click", () => {
@@ -284,9 +310,8 @@
 
     downloadBtn.addEventListener("click", downloadImage);
 
-    generatePuzzle();
     updateToggleLabel();
-    renderPuzzle();
+    safeGenerateAndRender();
   </script>
 </body>
 </html>
