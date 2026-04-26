@@ -75,7 +75,7 @@
     </div>
     <div id="statusMsg" class="status" aria-live="polite"></div>
     <div class="canvas-wrap">
-      <canvas id="puzzleCanvas" width="1200" height="1600" aria-label="Food microbiology word search puzzle grid"></canvas>
+      <canvas id="puzzleCanvas" width="1200" height="1600" aria-label="Food microbiology word search puzzle grid - Unsolved Puzzle"></canvas>
     </div>
   </main>
 
@@ -279,6 +279,8 @@
 
     function updateToggleLabel() {
       toggleBtn.textContent = showAnswers ? "Hide Answers" : "Show Answers";
+      const state = showAnswers ? "Answer Key" : "Unsolved Puzzle";
+      canvas.setAttribute("aria-label", `Food microbiology word search puzzle grid - ${state}`);
     }
 
     function downloadImage() {
