@@ -75,7 +75,7 @@
     </div>
     <div id="statusMsg" class="status" aria-live="polite"></div>
     <div class="canvas-wrap">
-      <canvas id="puzzleCanvas" width="1200" height="1600" aria-label="Food microbiology word search puzzle grid - Unsolved Puzzle"></canvas>
+      <canvas id="puzzleCanvas" width="1200" height="1600" aria-label="Food microbiology word search puzzle grid - UNSOLVED PUZZLE"></canvas>
     </div>
   </main>
 
@@ -104,14 +104,15 @@
     const ANSWER_HIGHLIGHT_COLOR = "#FF000055";
     const CELL_SIZE_PX = 38;
     const GRID_TEXT_OFFSET_X = 7;
+    const TEXT_VERTICAL_CENTER_DIVISOR = 2;
     const GRID_START_Y = 170;
     const WORD_LIST_TOP_MARGIN = 60;
     const WORD_LIST_ROW_HEIGHT = 34;
     const CARDINAL_ORIENTATIONS = [
-      { dx: 1, dy: 0 },
-      { dx: -1, dy: 0 },
-      { dx: 0, dy: 1 },
-      { dx: 0, dy: -1 },
+      { name: "right", dx: 1, dy: 0 },
+      { name: "left", dx: -1, dy: 0 },
+      { name: "down", dx: 0, dy: 1 },
+      { name: "up", dx: 0, dy: -1 },
     ];
     const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
@@ -227,8 +228,7 @@
       ctx.fillText(showAnswers ? "ANSWER KEY" : "UNSOLVED PUZZLE", width / 2, subtitleY);
 
       const cellSize = CELL_SIZE_PX;
-      const textHorizontalOffset = GRID_TEXT_OFFSET_X;
-      const textVerticalOffset = cellSize / 2;
+      const textVerticalOffset = cellSize / TEXT_VERTICAL_CENTER_DIVISOR;
       const gridPixelSize = GRID_SIZE * cellSize;
       const gridStartX = Math.floor((width - gridPixelSize) / 2);
       const gridStartY = GRID_START_Y;
@@ -254,7 +254,7 @@
 
       for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
-          const px = gridStartX + x * cellSize + textHorizontalOffset;
+          const px = gridStartX + x * cellSize + GRID_TEXT_OFFSET_X;
           const py = gridStartY + y * cellSize + textVerticalOffset;
           ctx.fillText(grid[y][x], px, py);
         }
@@ -279,7 +279,7 @@
 
     function updateToggleLabel() {
       toggleBtn.textContent = showAnswers ? "Hide Answers" : "Show Answers";
-      const state = showAnswers ? "Answer Key" : "Unsolved Puzzle";
+      const state = showAnswers ? "ANSWER KEY" : "UNSOLVED PUZZLE";
       canvas.setAttribute("aria-label", `Food microbiology word search puzzle grid - ${state}`);
     }
 
