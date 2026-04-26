@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Food Microbiology Word Search</title>
+  <title>Word Search Puzzle Generator</title>
   <style>
     :root {
       color-scheme: light;
@@ -21,15 +21,43 @@
       box-sizing: border-box;
     }
     .app {
-      width: min(100%, 980px);
+      width: min(100%, 1400px);
       background: #fff;
       border-radius: 12px;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
       padding: 20px;
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+    .sidebar {
+      width: 260px;
+      flex-shrink: 0;
+    }
+    .canvas-panel {
+      flex: 1;
+      min-width: 0;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .field label {
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .field input {
+      border: 1px solid #d0d7de;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-family: inherit;
     }
     .controls {
       display: flex;
-      flex-wrap: wrap;
+      flex-direction: column;
       gap: 10px;
       margin-bottom: 16px;
     }
@@ -42,6 +70,7 @@
       cursor: pointer;
       color: #fff;
       background: #1f6feb;
+      width: 100%;
     }
     button:hover {
       background: #185abc;
@@ -68,15 +97,23 @@
 </head>
 <body>
   <main class="app">
-    <div class="controls">
-      <button id="generateBtn" type="button">Generate New Puzzle</button>
-      <button id="toggleBtn" type="button">Show Answers</button>
-      <button id="downloadBtn" type="button">Download Image</button>
-    </div>
-    <div id="statusMsg" class="status" aria-live="polite"></div>
-    <div class="canvas-wrap">
-      <canvas id="puzzleCanvas" width="1200" height="1600" aria-label="Food microbiology word search puzzle grid - UNSOLVED PUZZLE"></canvas>
-    </div>
+    <aside class="sidebar">
+      <div class="field">
+        <label for="titleInput">Puzzle title</label>
+        <input id="titleInput" type="text" value="Food Microbiology Word Search" />
+      </div>
+      <div class="controls">
+        <button id="generateBtn" type="button">Generate New Puzzle</button>
+        <button id="toggleBtn" type="button">Show Answers</button>
+        <button id="downloadBtn" type="button">Download Image</button>
+      </div>
+      <div id="statusMsg" class="status" aria-live="polite"></div>
+    </aside>
+    <section class="canvas-panel">
+      <div class="canvas-wrap">
+        <canvas id="puzzleCanvas" width="1200" height="1600" aria-label="Word search puzzle grid - UNSOLVED PUZZLE"></canvas>
+      </div>
+    </section>
   </main>
 
   <script>
@@ -121,11 +158,31 @@
     const generateBtn = document.getElementById("generateBtn");
     const toggleBtn = document.getElementById("toggleBtn");
     const downloadBtn = document.getElementById("downloadBtn");
+    const titleInput = document.getElementById("titleInput");
     const statusMsg = document.getElementById("statusMsg");
+    const DEFAULT_TITLE = "Food Microbiology Word Search";
 
     let grid = [];
     let solutionMap = [];
     let showAnswers = false;
+    let puzzleTitle = DEFAULT_TITLE;
+
+    function normalizeTitle(value) {
+      const title = value.trim();
+      return title || DEFAULT_TITLE;
+    }
+
+    function makeFilenameBase() {
+      const slug = puzzleTitle
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      return slug || "word-search";
+    }
+
+    function getRenderedTitle() {
+      return puzzleTitle.toUpperCase();
+    }
 
     function makeEmptyGrid() {
       return Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(""));
@@ -221,8 +278,14 @@
 
       ctx.fillStyle = "#000000";
       ctx.textAlign = "center";
-      ctx.font = "bold 48px Arial, sans-serif";
-      ctx.fillText("FOOD MICROBIOLOGY WORD SEARCH", width / 2, titleY);
+      const renderedTitle = getRenderedTitle();
+      let titleFontSize = 48;
+      while (titleFontSize > 24) {
+        ctx.font = `bold ${titleFontSize}px Arial, sans-serif`;
+        if (ctx.measureText(renderedTitle).width <= width - 80) break;
+        titleFontSize -= 2;
+      }
+      ctx.fillText(renderedTitle, width / 2, titleY);
 
       ctx.font = "bold 28px Arial, sans-serif";
       ctx.fillText(showAnswers ? "ANSWER KEY" : "UNSOLVED PUZZLE", width / 2, subtitleY);
@@ -280,14 +343,15 @@
     function updateToggleLabel() {
       toggleBtn.textContent = showAnswers ? "Hide Answers" : "Show Answers";
       const state = showAnswers ? "ANSWER KEY" : "UNSOLVED PUZZLE";
-      canvas.setAttribute("aria-label", `Food microbiology word search puzzle grid - ${state}`);
+      canvas.setAttribute("aria-label", `${puzzleTitle} word search puzzle grid - ${state}`);
     }
 
     function downloadImage() {
       const url = canvas.toDataURL("image/png");
       const link = document.createElement("a");
       link.href = url;
-      link.download = showAnswers ? "food-microbiology-answer-key.png" : "food-microbiology-word-search.png";
+      const filenameBase = makeFilenameBase();
+      link.download = showAnswers ? `${filenameBase}-answer-key.png` : `${filenameBase}-word-search.png`;
       link.click();
     }
 
@@ -318,7 +382,13 @@
     });
 
     downloadBtn.addEventListener("click", downloadImage);
+    titleInput.addEventListener("input", () => {
+      puzzleTitle = normalizeTitle(titleInput.value);
+      updateToggleLabel();
+      renderPuzzle();
+    });
 
+    puzzleTitle = normalizeTitle(titleInput.value);
     updateToggleLabel();
     safeGenerateAndRender();
   </script>
