@@ -118,6 +118,108 @@
         display: block;
         background: #fff;
       }
+      .visually-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      details.advanced {
+        margin-bottom: 12px;
+      }
+      details.advanced summary {
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 700;
+        color: #555;
+        user-select: none;
+        padding: 4px 0;
+      }
+      details.advanced summary:hover {
+        color: #111;
+      }
+      .advanced-inner {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px 0 4px;
+      }
+      .advanced-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+      }
+      .advanced-row label {
+        flex: 1;
+        color: #555;
+      }
+      .advanced-row input[type="number"] {
+        width: 70px;
+        font-family: inherit;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        padding: 4px 8px;
+        font-size: 13px;
+      }
+      .stats {
+        font-size: 12px;
+        color: #555;
+        margin-bottom: 12px;
+        min-height: 16px;
+      }
+      .range-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .field input[type="range"] {
+        padding: 0;
+        border: none;
+        accent-color: #1f6feb;
+        flex: 1;
+      }
+      .range-value {
+        font-size: 13px;
+        color: #555;
+        min-width: 28px;
+        text-align: right;
+      }
+      button.btn-secondary {
+        background: #f0f6ff;
+        color: #1f6feb;
+        border: 1px solid #cce0ff;
+      }
+      button.btn-secondary:hover {
+        background: #dbeafe;
+      }
+      @media print {
+        body {
+          background: #fff;
+          padding: 0;
+        }
+        .sidebar {
+          display: none !important;
+        }
+        .app {
+          box-shadow: none;
+          border-radius: 0;
+          padding: 0;
+          display: block;
+        }
+        .canvas-wrap {
+          border: none;
+          overflow: visible;
+        }
+        canvas {
+          width: 100% !important;
+        }
+      }
     </style>
   </head>
   <body>
@@ -157,15 +259,95 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
         </div>
         <div class="field">
           <label class="checkbox-label">
-            <input type="checkbox" id="shuffleHintsCheck" />
+            <input type="checkbox" id="shuffleHintsCheck" checked />
             Shuffle hints order
           </label>
         </div>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" id="autoRegenerateCheck" />
+            Auto-regenerate on edit
+          </label>
+        </div>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" id="numberedHintsCheck" checked />
+            Numbered hints mode
+          </label>
+        </div>
+        <div class="field">
+          <label for="hintFontSizeInput">Hint font size</label>
+          <div class="range-row">
+            <input
+              type="range"
+              id="hintFontSizeInput"
+              min="14"
+              max="36"
+              value="22"
+            />
+            <span class="range-value" id="hintFontSizeValue">22</span>
+          </div>
+        </div>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" id="randomiseSeedCheck" checked />
+            Randomise seed on each generate
+          </label>
+        </div>
+        <div class="field">
+          <label for="seedInput"
+            >Puzzle seed
+            <span
+              id="seedRandomHint"
+              style="font-weight: 400; color: #888; display: none"
+              >(blank = random)</span
+            ></label
+          >
+          <input
+            id="seedInput"
+            type="text"
+            placeholder="e.g. 42"
+            style="font-family: inherit"
+            disabled
+          />
+        </div>
+        <details class="advanced">
+          <summary>Advanced settings</summary>
+          <div class="advanced-inner">
+            <div class="advanced-row">
+              <label for="maxAttemptsInput">Attempts per word</label>
+              <input
+                type="number"
+                id="maxAttemptsInput"
+                min="50"
+                max="2000"
+                value="300"
+              />
+            </div>
+            <div class="advanced-row">
+              <label for="maxFullAttemptsInput">Full puzzle retries</label>
+              <input
+                type="number"
+                id="maxFullAttemptsInput"
+                min="5"
+                max="200"
+                value="50"
+              />
+            </div>
+          </div>
+        </details>
         <div class="controls">
           <button id="generateBtn" type="button">Generate New Puzzle</button>
           <button id="toggleBtn" type="button">Show Answers</button>
           <button id="downloadBtn" type="button">Download Image</button>
+          <button id="exportPdfBtn" type="button" class="btn-secondary">
+            Export PDF
+          </button>
+          <button id="randomizeColorsBtn" type="button" class="btn-secondary">
+            Randomize Colors
+          </button>
         </div>
+        <div id="statsMsg" class="stats" aria-live="polite"></div>
         <div id="statusMsg" class="status" aria-live="polite"></div>
       </aside>
       <section class="canvas-panel">
@@ -173,7 +355,13 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
           <canvas
             id="puzzleCanvas"
             aria-label="Word search puzzle grid"
+            aria-hidden="true"
           ></canvas>
+          <table
+            id="puzzleTable"
+            class="visually-hidden"
+            aria-label="Word search puzzle grid — text version"
+          ></table>
         </div>
       </section>
     </main>
@@ -217,6 +405,18 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
       ];
       const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
+      // Seeded PRNG (mulberry32). Re-seeded at the start of each generation.
+      let rng = Math.random.bind(Math);
+      function seedRng(seed) {
+        let s = seed >>> 0;
+        rng = function () {
+          s = (s + 0x6d2b79f5) >>> 0;
+          let t = Math.imul(s ^ (s >>> 15), 1 | s);
+          t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+          return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+      }
+
       const canvas = document.getElementById("puzzleCanvas");
       const ctx = canvas.getContext("2d");
       const generateBtn = document.getElementById("generateBtn");
@@ -228,6 +428,23 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
       const allowReverseCheck = document.getElementById("allowReverseCheck");
       const allowDiagonalCheck = document.getElementById("allowDiagonalCheck");
       const shuffleHintsCheck = document.getElementById("shuffleHintsCheck");
+      const autoRegenerateCheck = document.getElementById(
+        "autoRegenerateCheck",
+      );
+      const numberedHintsCheck = document.getElementById("numberedHintsCheck");
+      const randomiseSeedCheck = document.getElementById("randomiseSeedCheck");
+      const seedRandomHint = document.getElementById("seedRandomHint");
+      const hintFontSizeInput = document.getElementById("hintFontSizeInput");
+      const hintFontSizeValue = document.getElementById("hintFontSizeValue");
+      const seedInput = document.getElementById("seedInput");
+      const maxAttemptsInput = document.getElementById("maxAttemptsInput");
+      const maxFullAttemptsInput = document.getElementById(
+        "maxFullAttemptsInput",
+      );
+      const exportPdfBtn = document.getElementById("exportPdfBtn");
+      const randomizeColorsBtn = document.getElementById("randomizeColorsBtn");
+      const statsMsg = document.getElementById("statsMsg");
+      const puzzleTable = document.getElementById("puzzleTable");
       const statusMsg = document.getElementById("statusMsg");
 
       let grid = [];
@@ -236,6 +453,7 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
       let currentGridSize = 10;
       let showAnswers = true;
       let puzzleTitle = DEFAULT_TITLE;
+      let currentPalette = ANSWER_PALETTE.map((c) => ({ ...c }));
 
       function parseTerms(text) {
         return text
@@ -269,7 +487,7 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
       }
 
       function randomInt(max) {
-        return Math.floor(Math.random() * max);
+        return Math.floor(rng() * max);
       }
 
       function randomLetter() {
@@ -289,7 +507,14 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
         return intersections;
       }
 
-      function placeWord(word, board, gridSize, orientations, placedCells) {
+      function placeWord(
+        word,
+        board,
+        gridSize,
+        orientations,
+        placedCells,
+        maxAttemptsPerWord,
+      ) {
         let bestScore = -Infinity;
         let bestPlacement = null;
 
@@ -305,7 +530,7 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
           centroidY /= placedCells.length;
         }
 
-        for (let attempt = 0; attempt < MAX_ATTEMPTS_PER_WORD; attempt++) {
+        for (let attempt = 0; attempt < maxAttemptsPerWord; attempt++) {
           const { dx, dy } = orientations[randomInt(orientations.length)];
           const x = randomInt(gridSize);
           const y = randomInt(gridSize);
@@ -359,13 +584,19 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
         }
       }
 
-      function generatePuzzle(terms, padding, orientations) {
+      function generatePuzzle(
+        terms,
+        padding,
+        orientations,
+        maxAttemptsPerWord,
+        maxFullAttempts,
+      ) {
         const sortedTerms = [...terms].sort(
           (a, b) => b.word.length - a.word.length,
         );
         const words = sortedTerms.map((t) => t.word);
         const gridSize = computeGridSize(words, padding);
-        for (let attempt = 0; attempt < MAX_FULL_PUZZLE_ATTEMPTS; attempt++) {
+        for (let attempt = 0; attempt < maxFullAttempts; attempt++) {
           const board = makeEmptyGrid(gridSize);
           const placed = [];
           const placedCells = [];
@@ -377,6 +608,7 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
               gridSize,
               orientations,
               placedCells,
+              maxAttemptsPerWord,
             );
             if (!result) {
               allPlaced = false;
@@ -390,7 +622,7 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
           return { grid: board, solutionMap: placed, gridSize };
         }
         throw new Error(
-          `Unable to place all words after ${MAX_FULL_PUZZLE_ATTEMPTS} attempts. Try increasing the grid padding.`,
+          `Unable to place all words after ${maxFullAttempts} attempts. Try increasing the grid padding.`,
         );
       }
 
@@ -449,26 +681,54 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
         return lineY;
       }
 
-      function measureHintsHeight(terms, answersVisible, maxWidth, lineHeight) {
-        ctx.font = "22px Arial, sans-serif";
-        let total = 0;
-        for (const { word, hint } of terms) {
-          const text = answersVisible ? `${word} \u2014 ${hint}` : hint;
-          const words = text.split(" ");
-          let line = "";
-          let lineCount = 1;
-          for (const w of words) {
-            const test = line ? line + " " + w : w;
-            if (ctx.measureText(test).width > maxWidth && line) {
-              lineCount++;
-              line = w;
-            } else {
-              line = test;
-            }
-          }
-          total += lineCount * lineHeight + 8;
+      function computeHintColumns(terms, maxHintWidth, hintTextFn, fontSize) {
+        ctx.font = `${fontSize}px Arial, sans-serif`;
+        const COL_GAP = 40;
+        for (const numCols of [3, 2]) {
+          const colWidth = (maxHintWidth - COL_GAP * (numCols - 1)) / numCols;
+          const allFit = terms.every((term) => {
+            return ctx.measureText(hintTextFn(term)).width <= colWidth;
+          });
+          if (allFit) return numCols;
         }
-        return total;
+        return 1;
+      }
+
+      function measureHintsHeight(
+        terms,
+        maxHintWidth,
+        lineHeight,
+        numCols,
+        hintTextFn,
+        fontSize,
+      ) {
+        ctx.font = `${fontSize}px Arial, sans-serif`;
+        const COL_GAP = 40;
+        const colWidth = (maxHintWidth - COL_GAP * (numCols - 1)) / numCols;
+        const chunkSize = Math.ceil(terms.length / numCols);
+        let maxColHeight = 0;
+        for (let col = 0; col < numCols; col++) {
+          const chunk = terms.slice(col * chunkSize, (col + 1) * chunkSize);
+          let colHeight = 0;
+          for (const term of chunk) {
+            const text = hintTextFn(term);
+            const words = text.split(" ");
+            let line = "";
+            let lineCount = 1;
+            for (const w of words) {
+              const test = line ? line + " " + w : w;
+              if (ctx.measureText(test).width > colWidth && line) {
+                lineCount++;
+                line = w;
+              } else {
+                line = test;
+              }
+            }
+            colHeight += lineCount * lineHeight + 8;
+          }
+          maxColHeight = Math.max(maxColHeight, colHeight);
+        }
+        return maxColHeight;
       }
 
       function normalizeTitle(value) {
@@ -500,17 +760,38 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
         const HEADER_HEIGHT = TITLE_FONT_SIZE + 30;
         const SUBTITLE_HEIGHT = showAnswers ? 44 : 0;
         const GRID_TOP_MARGIN = 20;
-        const HINT_LINE_HEIGHT = 32;
+        const HINT_FONT_SIZE = parseInt(hintFontSizeInput.value, 10) || 22;
+        const HINT_LINE_HEIGHT = HINT_FONT_SIZE + 10;
         const HINT_MARGIN_X = 50;
         const HINTS_TOP_MARGIN = 50;
         const CANVAS_BOTTOM_MARGIN = 40;
         const maxHintWidth = CANVAS_WIDTH - HINT_MARGIN_X * 2;
 
+        const wordNumberIndex = new Map();
+        terms.forEach((t, i) => wordNumberIndex.set(t.word, i + 1));
+
+        const getHintText = ({ word, hint }) => {
+          if (!showAnswers) return hint;
+          if (numberedHintsCheck.checked) {
+            const n = wordNumberIndex.get(word);
+            return n != null ? `${n}. ${hint}` : hint;
+          }
+          return `${word} \u2014 ${hint}`;
+        };
+
+        const numCols = computeHintColumns(
+          terms,
+          maxHintWidth,
+          getHintText,
+          HINT_FONT_SIZE,
+        );
         const hintsHeight = measureHintsHeight(
           terms,
-          showAnswers,
           maxHintWidth,
           HINT_LINE_HEIGHT,
+          numCols,
+          getHintText,
+          HINT_FONT_SIZE,
         );
 
         const gridStartY = HEADER_HEIGHT + SUBTITLE_HEIGHT + GRID_TOP_MARGIN;
@@ -549,7 +830,7 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
 
         if (showAnswers) {
           solutionMap.forEach((placement, idx) => {
-            const color = ANSWER_PALETTE[idx % ANSWER_PALETTE.length];
+            const color = currentPalette[idx % currentPalette.length];
             const cells = placement.cells;
             if (cells.length === 0) return;
             const xs = cells.map((c) => c.x);
@@ -619,43 +900,80 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
         ctx.textAlign = "left";
         ctx.textBaseline = "alphabetic";
         ctx.fillStyle = "#000000";
-        ctx.font = "22px Arial, sans-serif";
+        ctx.font = `${HINT_FONT_SIZE}px Arial, sans-serif`;
 
         const wordColorIndex = new Map();
         solutionMap.forEach((p, i) => wordColorIndex.set(p.word, i));
 
-        let currentY = gridStartY + gridPixelSize + HINTS_TOP_MARGIN;
+        // Draw word numbers in grid cells (numbered hints mode)
+        if (showAnswers && numberedHintsCheck.checked) {
+          const numSize = Math.max(9, Math.floor(cellSize * 0.28));
+          ctx.font = `bold ${numSize}px Arial, sans-serif`;
+          ctx.textAlign = "left";
+          ctx.textBaseline = "top";
+          solutionMap.forEach((placement, idx) => {
+            const color = currentPalette[idx % currentPalette.length];
+            const first = placement.cells[0];
+            ctx.fillStyle = color.stroke;
+            const n = wordNumberIndex.get(placement.word) ?? idx + 1;
+            ctx.fillText(
+              String(n),
+              gridStartX + first.x * cellSize + 2,
+              gridStartY + first.y * cellSize + 2,
+            );
+          });
+        }
+
+        ctx.textAlign = "left";
         ctx.textBaseline = "alphabetic";
-        for (const { word, hint } of terms) {
-          if (showAnswers) {
-            const cidx = wordColorIndex.has(word)
-              ? wordColorIndex.get(word) % ANSWER_PALETTE.length
-              : 0;
-            const prefix = `${word} \u2014 `;
-            const prefixWidth = ctx.measureText(prefix).width;
-            ctx.fillStyle = ANSWER_PALETTE[cidx].stroke;
-            ctx.fillText(prefix, HINT_MARGIN_X, currentY);
-            ctx.fillStyle = "#000000";
-            currentY = wrapTextOffset(
-              ctx,
-              hint,
-              HINT_MARGIN_X,
-              prefixWidth,
-              currentY,
-              maxHintWidth,
-              HINT_LINE_HEIGHT,
-            );
-          } else {
-            currentY = wrapText(
-              ctx,
-              hint,
-              HINT_MARGIN_X,
-              currentY,
-              maxHintWidth,
-              HINT_LINE_HEIGHT,
-            );
+        ctx.fillStyle = "#000000";
+        ctx.font = `${HINT_FONT_SIZE}px Arial, sans-serif`;
+        const COL_GAP = 40;
+        const colWidth = (maxHintWidth - COL_GAP * (numCols - 1)) / numCols;
+        const chunkSize = Math.ceil(terms.length / numCols);
+        for (let col = 0; col < numCols; col++) {
+          const chunk = terms.slice(col * chunkSize, (col + 1) * chunkSize);
+          const colStartX = HINT_MARGIN_X + col * (colWidth + COL_GAP);
+          let currentY = gridStartY + gridPixelSize + HINTS_TOP_MARGIN;
+          for (const { word, hint } of chunk) {
+            if (showAnswers) {
+              const cidx = wordColorIndex.has(word)
+                ? wordColorIndex.get(word) % currentPalette.length
+                : 0;
+              const isNumbered = numberedHintsCheck.checked;
+              const n = isNumbered ? wordNumberIndex.get(word) : null;
+              const prefix = isNumbered
+                ? n != null
+                  ? `${n}. `
+                  : ""
+                : `${word} \u2014 `;
+              const prefixWidth = ctx.measureText(prefix).width;
+              if (prefix) {
+                ctx.fillStyle = currentPalette[cidx].stroke;
+                ctx.fillText(prefix, colStartX, currentY);
+              }
+              ctx.fillStyle = "#000000";
+              currentY = wrapTextOffset(
+                ctx,
+                hint,
+                colStartX,
+                prefixWidth,
+                currentY,
+                colWidth,
+                HINT_LINE_HEIGHT,
+              );
+            } else {
+              currentY = wrapText(
+                ctx,
+                hint,
+                colStartX,
+                currentY,
+                colWidth,
+                HINT_LINE_HEIGHT,
+              );
+            }
+            currentY += 8;
           }
-          currentY += 8;
         }
       }
 
@@ -684,6 +1002,23 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
         statusMsg.textContent = message;
       }
 
+      function hashSeed(str) {
+        let h = 0x811c9dc5;
+        for (let i = 0; i < str.length; i++) {
+          h = Math.imul(h ^ str.charCodeAt(i), 0x01000193) >>> 0;
+        }
+        return h || 1;
+      }
+
+      function shuffleArray(arr) {
+        const out = [...arr];
+        for (let i = out.length - 1; i > 0; i--) {
+          const j = Math.floor(rng() * (i + 1));
+          [out[i], out[j]] = [out[j], out[i]];
+        }
+        return out;
+      }
+
       function safeGenerateAndRender() {
         const terms = parseTerms(termsTextarea.value);
         if (terms.length === 0) {
@@ -692,7 +1027,36 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
           );
           return;
         }
+
+        // Short word validation
+        const shortWords = terms
+          .filter((t) => t.word.length < 3)
+          .map((t) => t.word);
+        if (shortWords.length > 0) {
+          setStatus(
+            `Note: "${shortWords.join('", "')}" ${shortWords.length === 1 ? "is" : "are"} shorter than 3 letters and may be trivially easy to find.`,
+          );
+        } else {
+          setStatus("");
+        }
+
+        // Seed handling
+        if (randomiseSeedCheck.checked) seedInput.value = "";
+        const rawSeed = seedInput.value.trim();
+        const numericSeed =
+          rawSeed === "" ? Date.now() >>> 0 || 1 : hashSeed(rawSeed);
+        if (rawSeed === "") seedInput.value = String(numericSeed);
+        seedRng(numericSeed);
+
         const padding = Math.max(1, parseInt(paddingInput.value, 10) || 2);
+        const maxAttemptsPerWord = Math.max(
+          50,
+          parseInt(maxAttemptsInput.value, 10) || 300,
+        );
+        const maxFullAttempts = Math.max(
+          5,
+          parseInt(maxFullAttemptsInput.value, 10) || 50,
+        );
         const orientations = [
           { dx: 1, dy: 0 },
           { dx: 0, dy: 1 },
@@ -708,16 +1072,34 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
             : []),
         ];
         const displayTerms = shuffleHintsCheck.checked
-          ? [...terms].sort(() => Math.random() - 0.5)
+          ? shuffleArray(terms)
           : terms;
         try {
-          const result = generatePuzzle(terms, padding, orientations);
+          const result = generatePuzzle(
+            terms,
+            padding,
+            orientations,
+            maxAttemptsPerWord,
+            maxFullAttempts,
+          );
           grid = result.grid;
           solutionMap = result.solutionMap;
           currentTerms = displayTerms;
           currentGridSize = result.gridSize;
-          setStatus("");
+
+          // Stats
+          const totalCells = result.gridSize * result.gridSize;
+          const wordCells = new Set();
+          for (const { cells } of result.solutionMap) {
+            for (const c of cells) wordCells.add(`${c.x},${c.y}`);
+          }
+          const pct = ((wordCells.size / totalCells) * 100).toFixed(1);
+          statsMsg.textContent = `${result.solutionMap.length} word${
+            result.solutionMap.length !== 1 ? "s" : ""
+          } placed \u00b7 ${result.gridSize}\u00d7${result.gridSize} grid \u00b7 ${pct}% coverage`;
+
           renderPuzzle();
+          updateAccessibleTable();
         } catch (err) {
           const message =
             err instanceof Error ? err.message : "Unexpected error.";
@@ -726,10 +1108,89 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
         }
       }
 
+      function updateAccessibleTable() {
+        if (!grid.length) return;
+        puzzleTable.innerHTML = grid
+          .map(
+            (row) =>
+              `<tr>${row.map((cell) => `<td>${cell}</td>`).join("")}</tr>`,
+          )
+          .join("");
+      }
+
+      function exportPdf() {
+        if (!grid.length) return;
+        const was = showAnswers;
+        showAnswers = false;
+        renderPuzzle();
+        const puzzleOnly = canvas.toDataURL("image/png");
+        showAnswers = true;
+        renderPuzzle();
+        const withAnswers = canvas.toDataURL("image/png");
+        showAnswers = was;
+        renderPuzzle();
+        updateToggleLabel();
+        const win = window.open("", "_blank");
+        if (!win) {
+          setStatus("Pop-up blocked. Allow pop-ups to use Export PDF.");
+          return;
+        }
+        const safeTitle = puzzleTitle.replace(/</g, "&lt;");
+        win.document.write(
+          `<!doctype html><html><head><title>${safeTitle} \u2014 PDF</title>` +
+            `<style>body{margin:0}img{width:100%;display:block;page-break-after:always}</style></head>` +
+            `<body><img src="${puzzleOnly}" alt="Puzzle"/><img src="${withAnswers}" alt="Answer Key"/>` +
+            `<script>window.onload=function(){window.print()}<\/script></body></html>`,
+        );
+        win.document.close();
+      }
+
+      function randomizeColors() {
+        currentPalette = ANSWER_PALETTE.map(() => {
+          const h = (rng() * 360) | 0;
+          const s = (55 + rng() * 35) | 0;
+          const l = (45 + rng() * 15) | 0;
+          return {
+            fill: `hsla(${h},${s}%,${l}%,0.25)`,
+            stroke: `hsla(${h},${s}%,${l - 15}%,0.9)`,
+          };
+        });
+        renderPuzzle();
+      }
+
+      function updateSeedInputState() {
+        const isRandom = randomiseSeedCheck.checked;
+        seedInput.disabled = isRandom;
+        seedRandomHint.style.display = isRandom ? "none" : "inline";
+      }
+
+      randomiseSeedCheck.addEventListener("change", updateSeedInputState);
+      updateSeedInputState();
+
       generateBtn.addEventListener("click", safeGenerateAndRender);
       allowReverseCheck.addEventListener("change", safeGenerateAndRender);
       allowDiagonalCheck.addEventListener("change", safeGenerateAndRender);
       shuffleHintsCheck.addEventListener("change", safeGenerateAndRender);
+      seedInput.addEventListener("change", safeGenerateAndRender);
+      maxAttemptsInput.addEventListener("change", safeGenerateAndRender);
+      maxFullAttemptsInput.addEventListener("change", safeGenerateAndRender);
+
+      numberedHintsCheck.addEventListener("change", renderPuzzle);
+
+      hintFontSizeInput.addEventListener("input", () => {
+        hintFontSizeValue.textContent = hintFontSizeInput.value;
+        renderPuzzle();
+      });
+
+      let _debounceTimer = null;
+      termsTextarea.addEventListener("input", () => {
+        if (!autoRegenerateCheck.checked) return;
+        clearTimeout(_debounceTimer);
+        _debounceTimer = setTimeout(safeGenerateAndRender, 600);
+      });
+
+      exportPdfBtn.addEventListener("click", exportPdf);
+      randomizeColorsBtn.addEventListener("click", randomizeColors);
 
       toggleBtn.addEventListener("click", () => {
         showAnswers = !showAnswers;
@@ -747,6 +1208,15 @@ BACILLUSCEREUS A spore-forming foodborne bacterium commonly associated with cook
 
       puzzleTitle = normalizeTitle(titleInput.value);
       updateToggleLabel();
+      // Restore seed from URL hash on load
+      const _initSeed = new URLSearchParams(
+        location.hash.replace(/^#/, ""),
+      ).get("seed");
+      if (_initSeed) {
+        seedInput.value = _initSeed;
+        randomiseSeedCheck.checked = false;
+        updateSeedInputState();
+      }
       safeGenerateAndRender();
     </script>
   </body>
