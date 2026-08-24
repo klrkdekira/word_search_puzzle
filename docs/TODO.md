@@ -33,3 +33,16 @@
 - [x] **Accessible text fallback** — Render an off-screen `<table>` representation of the grid for screen readers (`aria-hidden="false"` on table, `aria-hidden="true"` on canvas).
 - [x] **Hint font size control** — Slider or number input to scale hint text size for printed handouts targeting different age groups.
 - [x] **Expose advanced generation settings** — `MAX_ATTEMPTS_PER_WORD` and `MAX_FULL_PUZZLE_ATTEMPTS` as collapsible advanced settings, useful when placing many long words in a tight grid.
+
+## Improvement Round 2 (2026-08)
+
+- [x] **Fix seed round-tripping** — All-digit seeds are used verbatim instead of hashed, so the displayed auto-generated seed reproduces the same puzzle when typed back in or restored from a URL.
+- [x] **Accidental-word scrub** — After filling empty cells, scan all active orientations for extra occurrences of any puzzle word; re-roll filler cells to remove them, or discard the board when an extra occurrence is made entirely of placed cells.
+- [x] **Friendlier parsing** — Dash separator (`—`, `–`, ` - `) enables lowercase and multi-word entries (spaces stripped for the grid, preserved for display); leading separator stripped from classic-format hints; duplicate words deduped with a status notice.
+- [x] **Copy Share Link button** — Encodes title, words, all settings, and seed as URL-safe base64 in the URL hash (`#p=...`) and copies the link; opening it restores the identical puzzle. Legacy `#seed=` still supported.
+- [x] **localStorage persistence** — Sidebar settings saved (debounced) on any change and restored on load; **Clear Saved Data** button removes the entry, strips the hash, and reloads defaults after confirmation.
+- [x] **Responsive layout** — Sidebar stacks above the canvas below 800px viewport width.
+- [x] **Docs sync** — SPEC.md defaults/controls tables and README input format updated to match the implementation; PDF export title now fully HTML-escaped.
+- [x] **File organisation** — Split the single `index.html` into `index.html` (markup), `styles.css`, and `app.js`; moved SPEC.md and TODO.md into `docs/`. Still zero dependencies and no build step.
+- [x] **Layout refresh** — Sidebar grouped into Puzzle / Options / Seed / Actions sections; single accent color reserved for the primary Generate button; sticky sidebar; stats moved above the canvas; visible focus outlines.
+- [x] **SEO** — Meta description/canonical/theme-color, Open Graph + Twitter card with generated 1200×630 social image, JSON-LD WebApplication structured data, SVG favicon + apple touch icon, visually-hidden `h1`, `noscript` fallback, and `sitemap.xml`. (robots.txt must live at the cheeleong.dev domain root, outside this repo.)
