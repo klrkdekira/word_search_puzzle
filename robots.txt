@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://cheeleong.dev/word_search_puzzle/sitemap.xml
